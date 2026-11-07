@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Simulating Jarvis using local AI — HKBK · AI Ambassador Programme</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --paper:#F7F5F0; --paper-2:#EFEBE1;
+  --rule:#CFC9BE;
+  --ink:#14161A; --ink-2:#3C4046; --ink-3:#6B7078;
+  --signal:#C2310F; --hot:#E4551F; --local:#0F6E4F; --cloud:#7C8391;
+  --well:#0E1116; --well-2:#171B22; --well-3:#1E242D; --well-rule:#2C323B;
+  --well-ink:#EDEBE6; --well-ink-2:#9AA3AF;
+  --sans:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --mono:"Geist Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+*{ box-sizing:border-box; }
+html{ scroll-behavior:smooth; }
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font:400 22px/1.55 var(--sans);
+  font-synthesis:none; -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+section{
+  position:relative; min-height:100vh;
+  display:grid; place-items:center;
+  padding:104px 0 64px;
+}
+section.dark{ background:var(--well); color:var(--well-ink); }
+.box{
+  width:min(1280px,92vw); margin:0 auto;
+  display:grid; grid-template-columns:repeat(12,1fr);
+  gap:30px 32px; align-content:center;
+}
+.box > *{ grid-column:1/-1; }
+.box > .c4{ grid-column:span 4; } .box > .c5{ grid-column:span 5; }
+.box > .c6{ grid-column:span 6; } .box > .c7{ grid-column:span 7; }
+.box > .c8{ grid-column:span 8; }
+
+/* ---- type ------------------------------------------------- */
+.kicker{
+  grid-column:1/-1;
+  display:flex; align-items:baseline; justify-content:space-between; gap:24px;
+  font:500 15px/1 var(--mono); letter-spacing:.12em; text-transform:uppercase;
+  color:var(--ink-3); margin-bottom:4px;
+}
+.dark .kicker{ color:var(--well-ink-2); }
+.kicker b{ color:var(--signal); font-weight:600; }
+.dark .kicker b{ color:var(--hot); }
+.kicker .no{ letter-spacing:.06em; opacity:.75; }
+
+h1{ font:600 78px/0.99 var(--sans); letter-spacing:-.042em; margin:0; grid-column:1/-1; max-width:17ch; }
+h2{ font:600 52px/1.06 var(--sans); letter-spacing:-.032em; margin:0; grid-column:1/-1; max-width:23ch; }
+.dark h1, .dark h2{ color:var(--well-ink); }
+h1 em, h2 em{ font-style:normal; color:var(--signal); }
+.dark h1 em, .dark h2 em{ color:var(--hot); }
+
+.lead{ font:400 29px/1.38 var(--sans); color:var(--ink-2); margin:0; max-width:42ch; }
+.lead.big{ font-size:31px; }
+.dark .lead{ color:var(--well-ink-2); }
+.lead b{ color:var(--ink); font-weight:600; }
+.dark .lead b{ color:var(--well-ink); }
+
+p{ margin:0; }
+.body{ font-size:22px; line-height:1.5; color:var(--ink-2); max-width:46ch; }
+.dark .body{ color:var(--well-ink-2); }
+.body b{ color:var(--ink); font-weight:600; }
+.dark .body b{ color:var(--well-ink); }
+.mono{ font-family:var(--mono); }
+.tick{ color:var(--signal); font-weight:600; }
+.dark .tick{ color:var(--hot); }
+
+.caption{
+  grid-column:1/-1;
+  font:400 18px/1.45 var(--mono); color:var(--ink-3);
+}
+.dark .caption{ color:var(--well-ink-2); }
+.caption b{ color:var(--ink); font-weight:500; }
+.dark .caption b{ color:var(--well-ink); }
+
+/* ---- shared blocks ---------------------------------------- */
+.well{
+  background:var(--well); border-radius:3px; color:var(--well-ink);
+  padding:26px 30px; box-shadow:0 0 0 2px var(--well-rule);
+}
+.dark .well{ background:var(--well-2); }
+
+.facts{ display:grid; gap:0; margin-top:6px; }
+.facts > div{
+  display:grid; grid-template-columns:132px 1fr; gap:18px; align-items:baseline;
+  padding:13px 0; border-bottom:2px solid var(--rule);
+}
+.dark .facts > div{ border-color:var(--well-rule); }
+.facts .k{ font:500 15px/1.3 var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--signal); }
+.dark .facts .k{ color:var(--hot); }
+.facts .v{ font-size:21px; line-height:1.4; color:var(--ink-2); }
+.dark .facts .v{ color:var(--well-ink-2); }
+
+/* ---- nav -------------------------------------------------- */
+.nav{
+  position:fixed; top:0; left:0; right:0; z-index:60;
+  display:flex; gap:2px; background:rgba(20,22,26,.05);
+  -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+  padding:0 14px;
+}
+body.dark .nav{ background:rgba(14,17,22,.78); }
+.nav a{
+  flex:1; padding:12px 6px; text-decoration:none; text-align:center;
+  font:500 12px/1 var(--mono); letter-spacing:.06em; text-transform:uppercase;
+  color:var(--ink-3); border-bottom:3px solid transparent;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.nav a.on{ color:var(--signal); border-bottom-color:var(--signal); }
+body.dark .nav a{ color:var(--well-ink-2); }
+body.dark .nav a.on{ color:var(--hot); border-bottom-color:var(--hot); }
+
+/* ---- slide 1: the four parts ------------------------------ */
+.hero h1{ margin-bottom:18px; }
+.hero .lead{ max-width:36ch; }
+.four{ grid-column:1/-1; display:grid; grid-template-columns:repeat(4,1fr); gap:2px; margin-top:24px; }
+.four .p{
+  background:var(--well-2); border-radius:3px; padding:20px 22px 18px;
+  position:relative; box-shadow:inset 0 0 0 2px transparent;
+}
+.four .p .top{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+.four .p .role{ font:500 15px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--well-ink-2); }
+.four .p .sz{ font:500 17px/1 var(--mono); color:var(--well-ink-2); }
+.four .p .nm{ font:400 17px/1.35 var(--mono); color:var(--well-ink-2); margin-top:18px; }
+.four .p .what{ font-size:20px; line-height:1.35; color:var(--well-ink-2); margin-top:6px; }
+.four .p.on{ background:var(--well-3); box-shadow:inset 0 0 0 2px var(--hot); }
+.four .p.on .role{ color:var(--hot); }
+.four .p.on .nm, .four .p.on .what, .four .p.on .sz{ color:var(--well-ink); }
+.four .p.on::before{
+  content:""; position:absolute; left:0; right:0; top:0; height:4px;
+  background:var(--hot); border-radius:3px 3px 0 0;
+}
+.punch{
+  grid-column:1/-1; margin-top:18px; display:flex; align-items:baseline; gap:18px;
+  font:400 24px/1.45 var(--sans); color:var(--well-ink-2);
+  padding-top:16px; border-top:2px solid var(--well-rule);
+}
+.punch b{ color:var(--well-ink); font-weight:600; }
+.punch .arw{ color:var(--hot); font-family:var(--mono); }
+
+/* ---- model card (slide 2) --------------------------------- */
+.modelcard{
+  background:var(--well); color:var(--well-ink); border-radius:3px;
+  padding:28px 30px 30px; box-shadow:0 0 0 2px var(--well-rule);
+}
+.mc-top{ display:grid; grid-template-columns:76px 1fr auto; gap:20px; align-items:center; padding-bottom:20px; border-bottom:2px solid var(--well-rule); }
+.mc-top .mark{ width:64px; height:64px; display:block; }
+.mc-name{ font:600 32px/1.1 var(--sans); letter-spacing:-.02em; }
+.mc-name span{ color:var(--well-ink-2); font-weight:400; font-size:24px; }
+.mc-file{ font:400 17px/1.3 var(--mono); color:var(--well-ink-2); margin-top:5px; word-break:break-all; }
+.mc-size{ font:500 15px/1 var(--mono); color:var(--well-ink-2); text-align:right; }
+.mc-size b{ display:block; font:600 32px/1 var(--sans); letter-spacing:-.02em; color:var(--well-ink); margin-bottom:6px; }
+.mc-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:2px; margin:20px 0 4px; }
+.mc-grid > div{ background:var(--well-2); padding:12px 14px; }
+.mc-grid .l{ display:block; font:500 13px/1 var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--well-ink-2); margin-bottom:8px; }
+.mc-grid .v{ font:500 21px/1 var(--mono); color:var(--well-ink); }
+.modelcard p{ font-size:21px; line-height:1.45; color:var(--well-ink-2); margin-top:16px; }
+.modelcard p b{ color:var(--well-ink); font-weight:600; }
+
+/* ---- attention matrix (slide 3) --------------------------- */
+.mx-head{ display:flex; align-items:baseline; justify-content:space-between; gap:16px; margin-bottom:12px; }
+.mx-head .t{ font:400 18px/1.2 var(--mono); color:var(--well-ink-2); }
+.mx-head .t b{ color:var(--hot); font-weight:500; }
+.mx-head .s{ font:400 15px/1 var(--mono); color:var(--well-ink-2); white-space:nowrap; letter-spacing:.06em; }
+.mxwrap{ timeline-scope:--mx; }
+.mx{ view-timeline-name:--mx; view-timeline-axis:block; display:grid; gap:4px; }
+.mx .mhead{ display:grid; grid-template-columns:92px repeat(10,1fr); gap:4px; align-items:end; height:74px; }
+.mx .mhead span{
+  font:400 13px/1 var(--mono); color:var(--well-ink-2);
+  writing-mode:vertical-rl; transform:rotate(180deg);
+  justify-self:center; white-space:nowrap; padding-bottom:4px;
+}
+.mx .mrow{ display:grid; grid-template-columns:92px repeat(10,1fr); gap:4px; align-items:center; }
+.mx .mrow .tk{ font:400 14px/1 var(--mono); color:var(--well-ink-2); text-align:right; padding-right:8px; white-space:nowrap; }
+.mx .mrow .tk b{ color:var(--well-ink); font-weight:500; }
+.mx .c{
+  display:block; height:27px; border-radius:2px;
+  background:rgba(240,96,60, calc(.05 + var(--w) * .95));
+}
+.mx .c.m{
+  background:#151A21;
+  background-image:repeating-linear-gradient(135deg, rgba(154,163,175,.14) 0 2px, rgba(0,0,0,0) 2px 7px);
+  box-shadow:inset 0 0 0 0 transparent;
+}
+.mx .mrow:hover .c{ filter:brightness(1.35); }
+.mx .c:hover{ box-shadow:0 0 0 2px var(--well-ink); filter:brightness(1.5); }
+.mx:has(.mrow:hover) .c{ filter:brightness(.5); }
+.mx:has(.mrow:hover) .mrow:hover .c{ filter:brightness(1.35); }
+.mx .mrow:hover .tk b{ color:var(--hot); }
+
+/* ---- matmul diagram --------------------------------------- */
+.mm{ display:grid; gap:16px; }
+.mm-row{ display:flex; align-items:center; gap:16px; }
+.mm-lab{ font:400 13px/1 var(--mono); color:var(--well-ink-2); letter-spacing:.1em; }
+.mm-grid{ position:relative; display:grid; grid-template-columns:repeat(3,32px); grid-template-rows:repeat(3,32px); gap:4px; }
+.mm-grid i{ display:block; background:#2B333F; border-radius:2px; }
+.mm-grid i.d{ background:#2D3541; }
+.mm-grid i.acc{ background:rgba(240,96,60,.55); }
+.mm-op{ font:400 26px/1 var(--mono); color:var(--well-ink-2); }
+.swipe{ position:absolute; top:0; left:0; width:32px; height:32px; box-shadow:0 0 0 2px var(--hot); border-radius:2px; background:rgba(240,96,60,.22); }
+.swipe.y{ width:100%; height:32px; }
+.swipe.x{ width:32px; height:100%; }
+#mmC .swipe{ background:rgba(240,96,60,.55); box-shadow:0 0 0 3px var(--hot); }
+.mm-eq{ display:flex; gap:10px; flex-wrap:wrap; }
+.mm-eq span{
+  font:400 18px/1 var(--mono); color:var(--well-ink-2);
+  border:2px solid var(--well-rule); border-radius:2px; padding:9px 11px;
+}
+.mm-eq .op{ border-color:transparent; padding-left:0; padding-right:0; --i:0; }
+.mm-note{ font:400 18px/1.4 var(--mono); color:var(--well-ink-2); }
+.mm-note b{ color:var(--well-ink); font-weight:500; }
+
+/* ---- context window (slide 4) ----------------------------- */
+.ctx{ display:grid; gap:12px; }
+.win{
+  position:relative; display:flex; gap:3px; height:104px;
+  padding:0; border-radius:3px;
+}
+.win .seg{
+  flex:1 1 0; border-radius:2px; background:rgba(20,22,26,.05);
+  box-shadow:inset 0 0 0 2px var(--rule); position:relative; min-width:0;
+}
+.win .seg.fill{ background:rgba(194,49,15,.1); box-shadow:inset 0 0 0 2px var(--signal); }
+.win .seg.fill.old{ background:rgba(20,22,26,.06); box-shadow:inset 0 0 0 2px var(--ink-3); }
+.win .seg span{
+  position:absolute; left:9px; bottom:9px; right:6px;
+  font:400 15px/1.2 var(--mono); color:var(--ink-3); white-space:nowrap; overflow:hidden;
+}
+.win .seg.fill span{ color:var(--signal); }
+.win .seg.fill.old span{ color:var(--ink-3); }
+.ctx-scale{ display:flex; justify-content:space-between; font:400 16px/1 var(--mono); color:var(--ink-3); }
+
+.work{ display:flex; align-items:flex-end; gap:3px; height:150px; margin-top:6px; }
+.work .b{ flex:1; display:flex; flex-direction:column; justify-content:flex-end; align-items:stretch; height:100%; }
+.work .b i{ display:block; min-height:5px; background:rgba(194,49,15,.14); box-shadow:inset 0 0 0 2px rgba(194,49,15,.55); border-radius:2px 2px 0 0; }
+.work .b:last-child i{ background:rgba(194,49,15,.4); box-shadow:inset 0 0 0 2px var(--signal); }
+.work .b em{ font:400 15px/1 var(--mono); font-style:normal; color:var(--ink-3); text-align:center; padding-top:8px; }
+
+/* ---- waveform --------------------------------------------- */
+.wave-wrap{ position:relative; }
+.wave{ display:flex; align-items:center; gap:3px; height:132px; }
+.wave i{
+  flex:1 1 0; min-width:0; border-radius:1px; display:block;
+  height:calc(var(--h) * 100%);
+  background:var(--rule);
+}
+.wave i.on{ background:var(--signal); }
+.dark .wave i{ background:var(--well-rule); }
+.dark .wave i.on{ background:var(--hot); }
+.playhead{
+  position:absolute; top:-10px; bottom:-10px; width:3px; left:0;
+  background:var(--signal); border-radius:2px; opacity:0;
+}
+.dark .playhead{ background:var(--hot); }
+.wave-legend{ display:flex; justify-content:space-between; font:400 15px/1 var(--mono); color:var(--ink-3); margin-top:10px; }
+.dark .wave-legend{ color:var(--well-ink-2); }
+
+/* ---- phoneme chips ---------------------------------------- */
+.ph{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.ph span{
+  font:400 20px/1 var(--mono); padding:10px 12px; border-radius:2px;
+  border:2px solid var(--rule); color:var(--ink-2); background:rgba(0,0,0,0);
+}
+.ph span.hi{ border-color:var(--signal); color:var(--signal); background:rgba(194,49,15,.06); }
+.ph .sep{ border:0; padding:0 2px; color:var(--ink-3); }
+
+/* ---- comparison lanes (slide 7) --------------------------- */
+.lanes{ display:grid; gap:20px; position:relative; }
+.lane{ display:grid; grid-template-columns:190px 1fr 116px; gap:20px; align-items:center; }
+.lane .who{ font:500 19px/1.25 var(--sans); color:var(--well-ink); }
+.lane .who small{ display:block; font:400 14px/1.3 var(--mono); color:var(--well-ink-2); margin-top:4px; }
+.lane .track{ position:relative; height:40px; background:var(--well-2); border-radius:2px; box-shadow:inset 0 0 0 2px var(--well-rule); }
+.lane .track i{ position:absolute; left:0; top:0; bottom:0; border-radius:2px; display:block; }
+.lane.piper .track i{ background:rgba(240,96,60,.45); box-shadow:inset 0 0 0 2px var(--hot); }
+.lane.kokoro .track i{ background:rgba(154,163,175,.25); box-shadow:inset 0 0 0 2px var(--well-ink-2); }
+.lane .val{ font:500 21px/1 var(--mono); color:var(--well-ink); text-align:right; }
+.lane .val small{ display:block; font:400 14px/1.3 var(--mono); color:var(--well-ink-2); margin-top:6px; }
+.rtline{
+  position:absolute; top:-6px; bottom:34px; width:3px; left:calc(190px + 20px + (100% - 190px - 20px - 116px - 20px) * 0.0588);
+  background:repeating-linear-gradient(180deg, var(--well-ink-2) 0 6px, rgba(0,0,0,0) 6px 11px);
+}
+.rtl-lab{ position:absolute; font:400 14px/1 var(--mono); color:var(--well-ink-2); white-space:nowrap; transform:translateX(-50%); }
+
+/* ---- pipeline (slide 9) ----------------------------------- */
+.pipe{ width:100%; height:auto; display:block; overflow:visible; }
+.pipe text{ font-family:var(--mono); }
+.pipe .nd{ fill:var(--well-2); stroke:var(--well-rule); stroke-width:2; }
+.pipe .nd.you{ fill:var(--well-3); stroke:var(--hot); }
+.pipe .nm{ font:500 24px/1 var(--sans); fill:var(--well-ink); letter-spacing:-.01em; }
+.pipe .rl{ font:400 13px/1 var(--mono); fill:var(--well-ink-2); letter-spacing:.1em; }
+.pipe .pt{ font:500 19px/1 var(--mono); fill:var(--hot); }
+.pipe .io{ font:400 14px/1 var(--mono); fill:var(--well-ink-2); }
+.pipe .base{ stroke:var(--well-rule); stroke-width:2; fill:none; }
+.pipe .flow{ stroke:var(--hot); stroke-width:3; fill:none; stroke-dasharray:11 9; }
+.pipe .loop{ stroke:var(--well-rule); stroke-width:2; fill:none; }
+.pipe .dot{ fill:var(--hot); opacity:0; }
+
+.endpoints{ display:grid; gap:8px; }
+.endpoints .ep{ display:grid; grid-template-columns:78px 1fr 1fr; gap:16px; align-items:baseline;
+  padding:9px 0; border-bottom:2px solid var(--well-rule); font-family:var(--mono); }
+.endpoints .ep:last-child{ border-bottom:0; }
+.endpoints .method{ font:500 14px/1 var(--mono); letter-spacing:.1em; color:var(--hot); }
+.endpoints .url{ font:400 19px/1.2 var(--mono); color:var(--well-ink); }
+.endpoints .url b{ color:var(--hot); font-weight:500; }
+.endpoints .io{ font:400 17px/1.2 var(--mono); color:var(--well-ink-2); text-align:right; }
+
+/* ---- file map (slide 10) ---------------------------------- */
+.files{ display:grid; gap:0; }
+.files .f{ display:grid; grid-template-columns:230px 1fr; gap:22px; align-items:baseline;
+  padding:14px 0; border-bottom:2px solid var(--rule); }
+.files .f:first-child{ border-top:2px solid var(--rule); }
+.files .f .fn{ font:500 19px/1.2 var(--mono); color:var(--signal); }
+.files .f .fd{ font-size:21px; line-height:1.4; color:var(--ink-2); }
+.files .f .fd b{ color:var(--ink); font-weight:600; }
+
+.runs{ display:grid; grid-template-columns:1fr; gap:2px; margin-top:6px; }
+.runs > div{ background:var(--well-2); border-radius:3px; padding:20px 22px; color:var(--well-ink); }
+.runs .lbl{ font:500 13px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--well-ink-2); margin-bottom:12px; }
+.runs .lbl b{ color:var(--hot); font-weight:600; }
+.runs .q{ font:400 19px/1.35 var(--mono); color:var(--well-ink); }
+.runs .a{ font:400 18px/1.45 var(--mono); color:var(--well-ink-2); margin-top:8px; }
+.runs .a b{ color:var(--well-ink); font-weight:500; }
+.runs .second{ background:var(--well-3); box-shadow:inset 0 0 0 2px var(--well-rule); }
+
+/* ---- scroll animation ------------------------------------- */
+.rv{ opacity:1; }
+@keyframes rvIn{ from{ opacity:0; transform:translateY(20px); } to{ opacity:1; transform:none; } }
+@keyframes cellIn{ from{ opacity:.04; transform:scale(.72); } to{ opacity:1; transform:none; } }
+@keyframes maskIn{ from{ opacity:0; } to{ opacity:1; } }
+@keyframes sweep{ from{ transform:translate(0,0); } to{ transform:translate(calc(200% + 8px), calc(200% + 8px)); } }
+@keyframes sweepY{ from{ transform:translateY(0); } to{ transform:translateY(calc(200% + 8px)); } }
+@keyframes sweepX{ from{ transform:translateX(0); } to{ transform:translateX(calc(200% + 8px)); } }
+@keyframes growIn{ from{ transform:scaleY(.06); } to{ transform:scaleY(1); } }
+@keyframes chipIn{ from{ opacity:.25; border-color:var(--rule); color:var(--ink-3); } to{ opacity:1; } }
+@keyframes barIn{ from{ opacity:.15; transform:scaleY(.5); } to{ opacity:1; transform:none; } }
+@keyframes segIn{ from{ opacity:.15; transform:scaleX(.4); } to{ opacity:1; transform:none; } }
+@keyframes drawIn{ from{ stroke-dashoffset:var(--len,600); } to{ stroke-dashoffset:0; } }
+@keyframes dashFlow{ from{ stroke-dashoffset:0; } to{ stroke-dashoffset:-400; } }
+@keyframes headRun{ from{ left:0; } to{ left:calc(100% - 3px); } }
+@keyframes dotRun{
+  0%{ opacity:0; transform:translateX(0); }
+  12%{ opacity:1; }
+  86%{ opacity:1; }
+  100%{ opacity:0; transform:translateX(var(--dist,50px)); }
+}
+
+@supports (animation-timeline: view()){
+  @media (prefers-reduced-motion: no-preference){
+
+    /* generic reveal */
+    .rv{ animation:rvIn linear both; animation-timeline:view(); animation-range:entry 0% cover 16%; }
+
+    /* attention matrix — one shared timeline, staggered rows */
+    .mx .c{ animation:cellIn linear both; animation-timeline:--mx;
+            animation-range:cover calc(var(--i) * 2.2%) cover calc(22% + var(--i) * 2.2%); }
+    .mx .c.m{ animation-name:maskIn;
+              animation-range:cover calc(10% + var(--i) * 2.2%) cover calc(28% + var(--i) * 2.2%); }
+
+    /* matmul sweep */
+    .mmwrap{ timeline-scope:--mm; }
+    .mm{ view-timeline-name:--mm; }
+    .swipe{ animation:sweep linear both; animation-timeline:--mm; animation-range:cover 4% cover 58%; }
+    .swipe.y{ animation-name:sweepY; }
+    .swipe.x{ animation-name:sweepX; }
+    .mm-eq span{ animation:chipIn linear both; animation-timeline:--mm;
+                 animation-range:cover calc(6% + var(--i) * 6%) cover calc(24% + var(--i) * 6%); }
+    .mm-grid i{ animation:maskIn linear both; animation-timeline:--mm; animation-range:cover 0% cover 18%; }
+
+    /* context window */
+    .ctx-wrap{ timeline-scope:--ctx; }
+    .win{ view-timeline-name:--ctx; }
+    .win .seg{ animation:segIn linear both; animation-timeline:--ctx;
+               animation-range:cover calc(var(--i) * 3%) cover calc(16% + var(--i) * 3%); }
+    .work .b i{ animation:growIn linear both; animation-timeline:view(); animation-range:entry 10% cover 30%; }
+
+    /* waveforms */
+    .wave-wrap{ timeline-scope:--wv; }
+    .wave{ view-timeline-name:--wv; }
+    .wave i{ animation:maskIn linear both; animation-timeline:--wv; animation-range:cover 0% cover 3%;
+             transition:background-color .22s linear; }
+    .wave i.on{ animation-name:heatIn; animation-timeline:--wv;
+                animation-range:cover calc(4% + var(--i) * 0.85%) cover calc(11% + var(--i) * 0.85%); }
+    .playhead{ animation:headRun linear both; animation-timeline:--wv; animation-range:cover 4% cover 74%; opacity:.9; }
+
+    /* phoneme chips */
+    .ph span{ animation:chipIn linear both; animation-timeline:view(); animation-range:entry 0% cover 24%; }
+
+    /* lanes */
+    .lanes .track i{ animation:segIn linear both; animation-timeline:view(); animation-range:entry 10% cover 34%; }
+
+    /* pipeline */
+    .pipewrap{ timeline-scope:--pipe; }
+    .pipe{ view-timeline-name:--pipe; }
+    .pipe .draw{ animation:drawIn linear both; animation-timeline:--pipe; animation-range:cover 4% cover 30%; }
+    .pipe .flow{ animation:dashFlow linear both; animation-timeline:--pipe; animation-range:cover 10% cover 90%; }
+    .pipe .dot{ animation:dotRun linear both; animation-timeline:--pipe; }
+    .pipe circle:nth-of-type(1){ animation-range:cover 4% cover 24%; }
+    .pipe circle:nth-of-type(2){ animation-range:cover 24% cover 44%; }
+    .pipe circle:nth-of-type(3){ animation-range:cover 44% cover 64%; }
+    .pipe circle:nth-of-type(4){ animation-range:cover 14% cover 34%; }
+    .pipe circle:nth-of-type(5){ animation-range:cover 34% cover 54%; }
+    .pipe circle:nth-of-type(6){ animation-range:cover 54% cover 74%; }
+    .pipe .nd, .pipe .nm, .pipe .rl, .pipe .pt, .pipe .io{
+      animation:maskIn linear both; animation-timeline:--pipe; animation-range:cover 0% cover 14%; }
+
+    /* files + runs */
+    .files .f, .runs > div{ animation:rvIn linear both; animation-timeline:view(); animation-range:entry 0% cover 22%; }
+  }
+}
+@keyframes heatIn{ from{ background:var(--rule); } to{ background:var(--signal); } }
+.dark .wave i.on{ animation-name:heatInDark; }
+@keyframes heatInDark{ from{ background:var(--well-rule); } to{ background:var(--hot); } }
+
+@media (prefers-reduced-motion: reduce){
+  *{ scroll-behavior:auto !important; animation:none !important; transition:none !important; }
+}
+
+@media (max-width:1100px){
+  h1{ font-size:52px; } h2{ font-size:38px; } .lead{ font-size:23px; } .lead.big{ font-size:24px; }
+  .body, .modelcard p, .files .f .fd, .runs .q{ font-size:19px; }
+  .c4, .c5, .c6, .c7, .c8{ grid-column:1/-1; }
+  .box > .c4, .box > .c5, .box > .c6, .box > .c7, .box > .c8{ grid-column:1/-1; }
+  .four{ grid-template-columns:1fr 1fr; }
+  .mx .mhead, .mx .mrow{ grid-template-columns:70px repeat(10,1fr); }
+  .lane{ grid-template-columns:130px 1fr 90px; }
+  .rtline{ display:none; }
+  .nav a{ font-size:10px; padding:10px 3px; }
+}
+</style>
+</head>
+<body>
+
+<nav class="nav" id="nav" aria-label="Slides">
+  <a href="#s1">Start</a>
+  <a href="#s2">Brain</a>
+  <a href="#s3">Attention</a>
+  <a href="#s4">Context</a>
+  <a href="#s5">Ears 1</a>
+  <a href="#s6">Ears 2</a>
+  <a href="#s7">Voice 1</a>
+  <a href="#s8">Voice 2</a>
+  <a href="#s9">Servers</a>
+  <a href="#s10">Code</a>
+</nav>
+
+<!-- ============================================================ 1 -->
+<section id="s1" class="dark hero">
+  <div class="box">
+    <div class="kicker">
+      <span>HKBK · AI Ambassador Programme · Bengaluru · 2 hours</span>
+      <span class="no">01 / 10</span>
+    </div>
+
+    <h1>Simulating Jarvis<br>using <em>local AI</em></h1>
+
+    <p class="lead">
+      Four parts make an assistant: an ear, a brain, a voice, and you.
+      <b>Only one of them decides whether it feels like an assistant.</b>
+      Everything in this session runs on the laptop in front of you.
+    </p>
+
+    <div class="four">
+      <div class="p">
+        <div class="top"><span class="role">Ear</span><span class="sz">32 MB</span></div>
+        <div class="nm">whisper tiny.en</div>
+        <div class="what">your voice → text</div>
+      </div>
+      <div class="p on">
+        <div class="top"><span class="role">Brain</span><span class="sz">533 MB</span></div>
+        <div class="nm">qwen 3.5 · 0.8B</div>
+        <div class="what">text → reply <span style="color:var(--hot)">← decides it</span></div>
+      </div>
+      <div class="p">
+        <div class="top"><span class="role">Voice</span><span class="sz">63 MB</span></div>
+        <div class="nm">piper · alba</div>
+        <div class="what">text → speech</div>
+      </div>
+      <div class="p">
+        <div class="top"><span class="role">You</span><span class="sz">0 MB</span></div>
+        <div class="nm">one html page</div>
+        <div class="what">the microphone and the click</div>
+      </div>
+    </div>
+
+    <p class="punch">
+      <span class="arw">→</span>
+      <span>Swap the ear, the voice, or the page: it is still an assistant. Swap the brain and you have <b>a different assistant</b>. That is why we start there.</span>
+    </p>
+  </div>
+</section>
+
+<!-- ============================================================ 2 -->
+<section id="s2">
+  <div class="box">
+    <div class="kicker"><span><b>01</b> · the brain</span><span class="no">02 / 10</span></div>
+    <h2>Local AI means the model runs<br><em>on your machine</em>.</h2>
+
+    <div class="c5 rv">
+      <p class="lead" style="font-size:26px">
+        Not a website you talk to. A file on your disk, loaded into memory,
+        doing its arithmetic on your own CPU while you wait for it.
+      </p>
+      <div class="facts">
+        <div><span class="k">No network</span><span class="v">Turn the wifi off. It still answers.</span></div>
+        <div><span class="k">No account</span><span class="v">No key, no quota, no per-message bill.</span></div>
+        <div><span class="k">No GPU</span><span class="v">It runs on the CPU. Slower than a graphics card, and it runs.</span></div>
+      </div>
+    </div>
+
+    <div class="c7 rv">
+      <div class="modelcard">
+        <div class="mc-top">
+          <svg class="mark" viewBox="0 0 48 48" role="img" aria-label="Qwen">
+            <path d="M24 3.2 41.6 13.4v20.4L24 44 6.4 33.8V13.4Z" fill="none" stroke="#EDEBE6" stroke-width="3" stroke-linejoin="round"/>
+            <circle cx="23" cy="22.4" r="7.4" fill="none" stroke="#E4551F" stroke-width="3"/>
+            <path d="M28.2 27.6 37.4 36.2" stroke="#E4551F" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+          <div>
+            <div class="mc-name">Qwen <span>3.5</span></div>
+            <div class="mc-file">qwen3.5-0.8b-q4_k_m.gguf</div>
+          </div>
+          <div class="mc-size"><b>533 MB</b>on disk</div>
+        </div>
+
+        <div class="mc-grid">
+          <div><span class="l">parameters</span><span class="v">0.8 B</span></div>
+          <div><span class="l">quantisation</span><span class="v">Q4_K_M</span></div>
+          <div><span class="l">a reply takes</span><span class="v">0.36–0.73 s</span></div>
+        </div>
+
+        <p>
+          <b>0.8B parameters</b> is a count of numbers — eight hundred million of them,
+          learned from text. That is the entire file. No database, no copy of the
+          internet, nothing to look anything up in.
+        </p>
+        <p>
+          <b>Q4_K_M</b> is how tightly those numbers are packed: roughly four bits each
+          instead of sixteen. It is the only reason 800 million of them fit in 533 MB
+          and still run on a laptop CPU.
+        </p>
+      </div>
+    </div>
+
+    <p class="caption rv">
+      Cloud models are the same arithmetic, larger, on someone else's CPU.
+      The arithmetic is not the difference. <b>The size is.</b>
+    </p>
+  </div>
+</section>
+
+<!-- ============================================================ 3 -->
+<section id="s3" class="dark">
+  <div class="box">
+    <div class="kicker"><span><b>02</b> · inside the brain</span><span class="no">03 / 10</span></div>
+    <h2>A transformer is <em>attention</em>.<br>Attention is <em>multiply and add</em>.</h2>
+
+    <div class="c6">
+      <div class="mx-head">
+        <span class="t">"<b>the cat sat on the mat because it was tired</b>"</span>
+        <span class="s">row → column</span>
+      </div>
+      <div class="mxwrap">
+        <div class="mx" id="mx"></div>
+      </div>
+      <p class="caption" style="margin-top:14px;font-size:17px">
+        Illustrative — the shape of the pattern, not weights logged from the model.
+        <b>Hover a row</b> to see what one word looks at.
+      </p>
+    </div>
+
+    <div class="c6 mmwrap">
+      <p class="body" style="font-size:21px;margin-bottom:18px">
+        Every one of those decisions is a number, and the model holds them as a grid:
+        word against word. The grid is the model's only way of connecting two words.
+        <b>The top half is blacked out</b> — at word four it is not allowed to see word
+        five. It predicts forward, one word at a time.
+      </p>
+
+      <div class="mm">
+        <div class="mm-row">
+          <span class="mm-lab">A</span>
+          <div class="mm-grid" id="mmA"></div>
+          <span class="mm-op">×</span>
+          <span class="mm-lab">B</span>
+          <div class="mm-grid" id="mmB"></div>
+          <span class="mm-op">=</span>
+          <span class="mm-lab">C</span>
+          <div class="mm-grid" id="mmC"></div>
+        </div>
+        <div class="mm-eq" id="mmEq">
+          <span style="--i:0">a₁×b₁</span><span class="op">+</span>
+          <span style="--i:1">a₂×b₂</span><span class="op">+</span>
+          <span style="--i:2">a₃×b₃</span>
+        </div>
+        <p class="mm-note">
+          One number in the output = <b>one row × one column</b>: multiply each pair,
+          add them up. That is the whole operation, and it is all a CPU does anyway —
+          the transformer just does a great many of them.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 4 -->
+<section id="s4">
+  <div class="box">
+    <div class="kicker"><span><b>03</b> · context</span><span class="no">04 / 10</span></div>
+    <h2>Context is the text in front of it. <em>Nothing else.</em></h2>
+
+    <div class="c7 ctx-wrap">
+      <p class="lead" style="font-size:25px;margin-bottom:22px">
+        The model has no memory between calls. Every turn, the page re-sends the
+        system prompt plus every turn so far. That list is the context — the window
+        the model can see at once.
+      </p>
+      <div class="ctx">
+        <div class="win" id="win"></div>
+        <div class="ctx-scale"><span>everything said so far, in order</span><span>empty room · it writes here</span></div>
+      </div>
+      <p class="caption" style="margin-top:14px;font-size:17px">
+        Three exchanges in, and <b>all six messages get re-sent every turn</b> — before
+        the model has written a word of the next answer.
+      </p>
+    </div>
+
+    <div class="c5">
+      <div class="well" style="padding:24px 26px">
+        <div style="font:500 14px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--well-ink-2);margin-bottom:16px">
+          workload, turn by turn
+        </div>
+        <div class="work" id="work"></div>
+        <p class="caption" style="font-size:15px;margin-top:12px">
+          Relative work, if every turn adds the same amount of text.
+          <b>Squares, not measured milliseconds.</b>
+        </p>
+      </div>
+    </div>
+
+    <div class="c12" style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:6px">
+      <p class="body">
+        Every word in the window is compared with every other word. Twice the text is
+        about four times the work, so the sixth turn is not six times slower than the
+        first — it is closer to thirty-six times the work. <b>That is what "remember six
+        turns" costs.</b>
+      </p>
+      <p class="body">
+        And the reply cannot start until the whole window has been read. The pause you
+        feel before it speaks <b>is the window</b>, not the typing. Longer memory, longer
+        pause — every single turn.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 5 -->
+<section id="s5" class="dark">
+  <div class="box">
+    <div class="kicker"><span><b>04</b> · the ears · 1 of 2</span><span class="no">05 / 10</span></div>
+    <h2>It hears with <em>Whisper</em>. 32 MB.</h2>
+
+    <div class="c5 rv">
+      <div style="display:flex;align-items:center;gap:22px;margin-bottom:24px">
+        <svg viewBox="0 0 48 48" width="64" height="64" role="img" aria-label="Whisper">
+          <path d="M24 3.6 41.8 13.9v20.2L24 44.4 6.2 34.1V13.9Z" fill="none" stroke="#EDEBE6" stroke-width="2.8" stroke-linejoin="round"/>
+          <g stroke="#E4551F" stroke-width="2.8" stroke-linecap="round">
+            <path d="M16 21.5v5"/>
+            <path d="M20.5 17v14"/>
+            <path d="M24 19.5v9"/>
+            <path d="M27.5 15.5v17"/>
+            <path d="M32 21v6"/>
+          </g>
+        </svg>
+        <div>
+          <div style="font:600 30px/1.1 var(--sans);letter-spacing:-.02em">Whisper <span style="color:var(--well-ink-2);font-weight:400;font-size:22px">tiny.en</span></div>
+          <div style="font:400 17px/1.3 var(--mono);color:var(--well-ink-2);margin-top:6px">ggml-tiny.en-q5_1.bin · 32 MB</div>
+        </div>
+      </div>
+
+      <div class="facts">
+        <div><span class="k">What it is</span><span class="v">OpenAI's speech recogniser, compiled to run locally by whisper.cpp.</span></div>
+        <div><span class="k">Speed</span><span class="v">About <b style="color:var(--well-ink)">0.5 s</b> for a sentence of a few seconds, on this CPU.</span></div>
+        <div><span class="k">Language</span><span class="v">English only. That is what the <span class="mono">.en</span> means.</span></div>
+      </div>
+    </div>
+
+    <div class="c7 rv">
+      <div class="well" style="padding:26px 30px">
+        <div style="font:500 14px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--hot);margin-bottom:16px">
+          why not the browser's own speech API
+        </div>
+        <p style="font:400 24px/1.35 var(--sans);color:var(--well-ink);max-width:30ch">
+          <span class="mono" style="color:var(--hot)">webkitSpeechRecognition</span> is four lines of code and it works.
+        </p>
+        <p style="font-size:21px;line-height:1.5;color:var(--well-ink-2);margin-top:16px">
+          It also streams your microphone to Google's servers. In a session about models
+          that live on your own disk, that would be a lie I would have to talk around.
+          So the ear is a file too — <b style="color:var(--well-ink)">nothing you say leaves
+          the laptop</b>, ever, including when you are offline.
+        </p>
+        <p style="font-size:21px;line-height:1.5;color:var(--well-ink-2);margin-top:16px">
+          The honest cost: tiny.en is the smallest Whisper. It mishears names, numbers and
+          Indian English far more often than the large ones. <b style="color:var(--well-ink)">You are
+          trading accuracy for 32 MB</b>, and you should know which side of that trade you are on.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 6 -->
+<section id="s6">
+  <div class="box">
+    <div class="kicker"><span><b>04</b> · the ears · 2 of 2</span><span class="no">06 / 10</span></div>
+    <h2>Sound becomes <em>one long list of numbers</em>.</h2>
+
+    <div class="c12">
+      <div class="wave-wrap">
+        <div class="wave" id="wvIn" data-bars="76" data-seed="1"></div>
+        <div class="playhead" id="phIn"></div>
+      </div>
+      <div class="wave-legend">
+        <span>microphone · 44,100 samples a second</span>
+        <span>one sentence · about 3 s</span>
+      </div>
+    </div>
+
+    <div class="c12" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:32px;margin-top:14px">
+      <div class="rv">
+        <div class="mono" style="font-size:17px;color:var(--signal);letter-spacing:.06em">01 · RESAMPLE</div>
+        <p class="body" style="margin-top:10px">We down-sample to <b>16 kHz</b>, the rate Whisper was trained on.
+          One second of speech becomes 16,000 numbers instead of 44,100. 16 kHz already covers
+          every frequency a voice actually uses.</p>
+      </div>
+      <div class="rv">
+        <div class="mono" style="font-size:17px;color:var(--signal);letter-spacing:.06em">02 · PACK</div>
+        <p class="body" style="margin-top:10px">The browser records WebM, and whisper.cpp refuses WebM. So the page
+          writes a <b>WAV header by hand</b> and hands over raw 16-bit samples. Thirty lines of
+          arithmetic in <span class="mono" style="font-size:19px">app.js</span>.</p>
+      </div>
+      <div class="rv">
+        <div class="mono" style="font-size:17px;color:var(--signal);letter-spacing:.06em">03 · RECOGNISE</div>
+        <p class="body" style="margin-top:10px">Those numbers go to the ear as one HTTP request. What comes back
+          is a string — <b>plain text, no punctuation, lower case</b> — which the brain never
+          knows was ever audio.</p>
+      </div>
+    </div>
+
+    <div class="c12" style="margin-top:6px">
+      <div style="display:flex;align-items:center;gap:22px;flex-wrap:wrap">
+        <span class="mono" style="font-size:15px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)">the ear returns</span>
+        <div class="ph">
+          <span>what</span><span>is</span><span>seventeen</span><span>times</span>
+          <span>twenty</span><span>three</span>
+        </div>
+        <span style="font:400 19px/1.3 var(--mono);color:var(--ink-2)">
+          → <span style="color:var(--ink)">"what is seventeen times twenty three"</span>
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 7 -->
+<section id="s7" class="dark">
+  <div class="box">
+    <div class="kicker"><span><b>05</b> · the voice · 1 of 2</span><span class="no">07 / 10</span></div>
+    <h2>It speaks with <em>Piper</em>. 63 MB.</h2>
+
+    <div class="c5 rv">
+      <div style="display:flex;align-items:center;gap:22px;margin-bottom:24px">
+        <svg viewBox="0 0 48 48" width="64" height="64" role="img" aria-label="Piper">
+          <rect x="4.5" y="4.5" width="39" height="39" rx="4" fill="none" stroke="#EDEBE6" stroke-width="2.6"/>
+          <path d="M13 18.5h4.5L25 12.5v23l-7.5-6H13Z" fill="none" stroke="#E4551F" stroke-width="2.6" stroke-linejoin="round"/>
+          <g fill="none" stroke="#E4551F" stroke-width="2.6" stroke-linecap="round">
+            <path d="M29 19.5c2.8 2.6 2.8 6.4 0 9"/>
+            <path d="M33.5 16c4.6 4.4 4.6 11.6 0 16" opacity=".6"/>
+          </g>
+        </svg>
+        <div>
+          <div style="font:600 30px/1.1 var(--sans);letter-spacing:-.02em">Piper <span style="color:var(--well-ink-2);font-weight:400;font-size:22px">alba · en_GB</span></div>
+          <div style="font:400 17px/1.3 var(--mono);color:var(--well-ink-2);margin-top:6px">en_GB-alba-medium.onnx · 63 MB</div>
+        </div>
+      </div>
+
+      <div class="facts">
+        <div><span class="k">What it is</span><span class="v">Rhasspy's text-to-speech, one ONNX file per voice.</span></div>
+        <div><span class="k">Speed</span><span class="v">About <b style="color:var(--well-ink)">17× faster than real time</b> on this CPU — a ten-second reply is ready in about 0.6 s.</span></div>
+        <div><span class="k">A reply takes</span><span class="v"><b style="color:var(--well-ink)">0.3–0.5 s</b>, measured.</span></div>
+      </div>
+    </div>
+
+    <div class="c7 rv">
+      <div class="well" style="padding:28px 30px">
+        <div style="font:500 14px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--hot);margin-bottom:22px">
+          the comparison I actually ran
+        </div>
+        <div class="lanes">
+          <div class="lane piper">
+            <div class="who">Piper<small>63 MB · what we use</small></div>
+            <div class="track"><i style="width:100%"></i></div>
+            <div class="val">17×<small>real time</small></div>
+          </div>
+          <div class="lane kokoro">
+            <div class="who">Kokoro<small>better voice, larger file</small></div>
+            <div class="track"><i style="width:5.3%"></i></div>
+            <div class="val">0.9×<small>real time</small></div>
+          </div>
+          <div class="rtline" aria-hidden="true"></div>
+          <span class="rtl-lab" style="left:calc(190px + 20px + (100% - 346px) * 0.0588);bottom:-30px">1× — real time</span>
+        </div>
+        <p style="font-size:21px;line-height:1.5;color:var(--well-ink-2);margin-top:44px">
+          Kokoro sounds better than Piper. I measured both on this laptop.
+          Kokoro generates <b style="color:var(--well-ink)">slower than the audio plays</b> — a
+          ten-second answer needs eleven seconds to make, before a single word comes out of
+          the speaker. That is not a conversation; that is loading.
+        </p>
+        <p style="font-size:21px;line-height:1.5;color:var(--well-ink-2);margin-top:14px">
+          Piper is not the best voice available. It is the best voice that keeps up.
+          <b style="color:var(--well-ink)">That is the whole decision.</b>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 8 -->
+<section id="s8">
+  <div class="box">
+    <div class="kicker"><span><b>05</b> · the voice · 2 of 2</span><span class="no">08 / 10</span></div>
+    <h2>Text becomes <em>phonemes</em>. Phonemes become air.</h2>
+
+    <div class="c12">
+      <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-bottom:6px">
+        <span class="mono" style="font-size:24px;color:var(--ink)">"Good evening, sir."</span>
+        <span class="mono" style="font-size:22px;color:var(--ink-3)">→</span>
+        <div class="ph">
+          <span class="hi">ɡ</span><span class="hi">ʊ</span><span class="hi">d</span>
+          <span class="sep mono">·</span>
+          <span>iː</span><span>v</span><span>n</span><span>ɪ</span><span>ŋ</span>
+          <span class="sep mono">·</span>
+          <span>s</span><span>ɜː</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="c12" style="margin-top:10px">
+      <div class="wave-wrap">
+        <div class="wave" id="wvOut" data-bars="76" data-seed="7"></div>
+        <div class="playhead" id="phOut"></div>
+      </div>
+      <div class="wave-legend">
+        <span>24 kHz waveform · 16-bit mono</span>
+        <span>0.3–0.5 s to generate</span>
+      </div>
+    </div>
+
+    <div class="c12" style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:16px">
+      <p class="body">
+        Piper is two models wearing one coat. First <b>espeak-ng</b> turns English spelling
+        into phonemes — how the word sounds, not how it is written. Then a small VITS model
+        turns phonemes into a waveform, sample by sample.
+      </p>
+      <p class="body">
+        That split is why it says <b>"live" and "give" differently</b>, and why it can read
+        almost any English word it has never seen. It still has no idea what any of it means:
+        wrong stress, flat emotion, and it will read an acronym as if it were a word.
+        On the other hand it never stumbles, never repeats itself, and never stalls —
+        which is what you actually notice in a demo.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 9 -->
+<section id="s9" class="dark">
+  <div class="box">
+    <div class="kicker"><span><b>06</b> · what holds it together</span><span class="no">09 / 10</span></div>
+    <h2>Three servers, three ports,<br><em>one address</em>.</h2>
+
+    <div class="c12 pipewrap" style="margin-top:2px">
+      <svg class="pipe" viewBox="0 0 1180 282" role="img" aria-label="Ear to brain to voice to you, and back">
+        <!-- connectors -->
+        <path class="base" d="M300 78 H362"/>
+        <path class="base" d="M602 78 H664"/>
+        <path class="base" d="M904 78 H966"/>
+        <path class="loop" d="M1043 126 C1043 208 1020 218 988 218 H231 C199 218 180 208 180 126"/>
+
+        <path class="flow draw" d="M300 78 H362" style="--len:64"/>
+        <path class="flow draw" d="M602 78 H664" style="--len:64"/>
+        <path class="flow draw" d="M904 78 H966" style="--len:64"/>
+
+        <!-- nodes -->
+        <rect class="nd" x="60" y="30" width="240" height="96" rx="3"/>
+        <rect class="nd" x="362" y="30" width="240" height="96" rx="3"/>
+        <rect class="nd" x="664" y="30" width="240" height="96" rx="3"/>
+        <rect class="nd you" x="966" y="30" width="154" height="96" rx="3"/>
+
+        <text class="rl" x="82" y="58">01 · EAR</text>
+        <text class="nm" x="82" y="88">Whisper</text>
+        <text class="pt" x="82" y="112">:8081</text>
+
+        <text class="rl" x="384" y="58">02 · BRAIN</text>
+        <text class="nm" x="384" y="88">Qwen 0.8B</text>
+        <text class="pt" x="384" y="112">:5001</text>
+
+        <text class="rl" x="686" y="58">03 · VOICE</text>
+        <text class="nm" x="686" y="88">Piper</text>
+        <text class="pt" x="686" y="112">:5002</text>
+
+        <text class="rl" x="988" y="58">04 · YOU</text>
+        <text class="nm" x="988" y="88">the page</text>
+        <text class="pt" x="988" y="112">127.0.0.1</text>
+
+        <!-- packets travelling along the pipes -->
+        <circle class="dot" cx="312" cy="78" r="5" style="--dist:40px"/>
+        <circle class="dot" cx="614" cy="78" r="5" style="--dist:40px"/>
+        <circle class="dot" cx="916" cy="78" r="5" style="--dist:40px"/>
+        <circle class="dot" cx="312" cy="78" r="5" style="--dist:40px"/>
+        <circle class="dot" cx="614" cy="78" r="5" style="--dist:40px"/>
+        <circle class="dot" cx="916" cy="78" r="5" style="--dist:40px"/>
+
+        <text class="io" x="60" y="262">you speak</text>
+        <text class="io" x="1120" y="262" text-anchor="end">it answers · ~1.2 s end to end, measured</text>
+      </svg>
+    </div>
+
+    <div class="c6 rv">
+      <p class="lead" style="font-size:24px;margin-bottom:18px">
+        Nothing here is glued together. Each one is a separate program that listens on a
+        port. The page is just the thing that calls them <b>in order</b>.
+      </p>
+      <p class="caption" style="font-size:17px">
+        All three bind to <b>127.0.0.1</b> — "this computer". There is no other address to
+        call, no key to send, and no way for the request to leave the machine.
+      </p>
+    </div>
+
+    <div class="c6 rv">
+      <div class="endpoints">
+        <div class="ep">
+          <span class="method">POST</span>
+          <span class="url">127.0.0.1<b>:8081</b>/inference</span>
+          <span class="io">wav → text</span>
+        </div>
+        <div class="ep">
+          <span class="method">POST</span>
+          <span class="url">127.0.0.1<b>:5001</b>/api/v1/generate</span>
+          <span class="io">text → text</span>
+        </div>
+        <div class="ep">
+          <span class="method">POST</span>
+          <span class="url">127.0.0.1<b>:5002</b>/say</span>
+          <span class="io">text → wav</span>
+        </div>
+      </div>
+      <p class="caption" style="font-size:17px;margin-top:14px">
+        Three <b>curl</b> commands. That is the entire backend — if the page breaks, the
+        assistant still answers from a terminal.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 10 -->
+<section id="s10">
+  <div class="box">
+    <div class="kicker"><span><b>07</b> · the code, then two runs</span><span class="no">10 / 10</span></div>
+    <h2>Five files. Then we run it <em>twice</em>.</h2>
+
+    <div class="c7">
+      <div class="files">
+        <div class="f"><span class="fn">app/index.html</span><span class="fd">One button, one line of transcript, one audio element. <b>That is the whole interface.</b></span></div>
+        <div class="f"><span class="fn">app/app.js</span><span class="fd">Records, builds the WAV, posts to 8081 → 5001 → 5002, plays what comes back. <b>This is the assistant.</b></span></div>
+        <div class="f"><span class="fn">app/style.css</span><span class="fd">Everything you see on screen, and nothing else.</span></div>
+        <div class="f"><span class="fn">voice-server.py</span><span class="fd">Wraps Piper behind one route: text in, WAV bytes out.</span></div>
+        <div class="f"><span class="fn">start.py</span><span class="fd">Starts the three servers, waits for the ports, opens the page.</span></div>
+      </div>
+    </div>
+
+    <div class="c5">
+      <div class="runs">
+        <div class="second">
+          <div class="lbl">run 1 · <b>local</b></div>
+          <div class="q">"what is seventeen times twenty three"</div>
+          <div class="a">628 MB of models on your CPU. About <b>1.2 s</b> end to end. Nothing leaves the machine.</div>
+        </div>
+        <div>
+          <div class="lbl">run 2 · <b>a cloud key</b></div>
+          <div class="q">the same sentence, the same page</div>
+          <div class="a">One line changed. Watch two things: <b>what the answer is</b>, and <b>what leaves the laptop</b>.</div>
+        </div>
+      </div>
+      <p class="body" style="margin-top:22px">
+        I am not going to tell you one is better. You will hear both in the next ten minutes
+        and you can decide for yourself — <b>which is the only way this comparison is worth
+        anything</b>.
+      </p>
+    </div>
+  </div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- the words, and a hand-set attention pattern -----------------
+  var TOKENS = ["the", "cat", "sat", "on", "the", "mat", "because", "it", "was", "tired"];
+
+  // row = the word looking; col = the word being looked at.
+  // Illustrative shape, not values logged from the model.
+  var W = {
+    0: { 1: 0.55, 2: 0.22 },
+    1: { 0: 0.42, 2: 0.5, 3: 0.24, 5: 0.3 },
+    2: { 1: 0.62, 0: 0.3, 3: 0.4, 4: 0.2 },
+    3: { 5: 0.48, 1: 0.26, 4: 0.34 },
+    4: { 5: 0.38, 2: 0.3, 1: 0.24 },
+    5: { 3: 0.44, 1: 0.4, 4: 0.24 },
+    6: { 2: 0.34, 7: 0.5, 5: 0.28 },
+    7: { 1: 0.66, 5: 0.2, 6: 0.34 },
+    8: { 7: 0.58, 9: 0.5, 1: 0.2 },
+    9: { 7: 0.62, 8: 0.4, 1: 0.24 }
+  };
+
+  var mx = document.getElementById("mx");
+  if (mx) {
+    var head = document.createElement("div");
+    head.className = "mhead";
+    head.appendChild(document.createElement("span"));
+    TOKENS.forEach(function (t) {
+      var s = document.createElement("span");
+      s.textContent = t;
+      head.appendChild(s);
+    });
+    mx.appendChild(head);
+
+    TOKENS.forEach(function (tok, r) {
+      var row = document.createElement("div");
+      row.className = "mrow";
+      row.style.setProperty("--i", String(r));
+
+      var lab = document.createElement("span");
+      lab.className = "tk";
+      var b = document.createElement("b");
+      b.textContent = tok;
+      lab.appendChild(b);
+      row.appendChild(lab);
+
+      for (var c = 0; c < TOKENS.length; c++) {
+        var cell = document.createElement("i");
+        cell.className = c > r ? "c m" : "c";
+        var raw = c > r ? 0 : (W[r] && W[r][c]) || 0.02 + ((r * 7 + c * 3) % 5) * 0.012;
+        var w = Math.pow(raw, 1.45);
+        cell.style.setProperty("--w", w.toFixed(3));
+        cell.title = TOKENS[r] + " → " + TOKENS[c];
+        row.appendChild(cell);
+      }
+      mx.appendChild(row);
+    });
+  }
+
+  // ---- matmul grids -------------------------------------------------
+  function fillGrid(id, accent) {
+    var g = document.getElementById(id);
+    if (!g) return;
+    for (var i = 0; i < 9; i++) {
+      var cell = document.createElement("i");
+      if (accent.indexOf(i) > -1) cell.className = "acc";
+      g.appendChild(cell);
+    }
+    var sw = document.createElement("span");
+    sw.className = "swipe" + (id === "mmA" ? " y" : id === "mmB" ? " x" : "");
+    g.appendChild(sw);
+  }
+  fillGrid("mmA", []);
+  fillGrid("mmB", []);
+  fillGrid("mmC", []);
+
+  // ---- context window ----------------------------------------------
+  var win = document.getElementById("win");
+  if (win) {
+    var labels = ["system", "you", "jarvis", "you", "jarvis", "you"];
+    for (var i = 0; i < 8; i++) {
+      var seg = document.createElement("div");
+      seg.className = "seg";
+      seg.style.setProperty("--i", String(i));
+      if (i < labels.length) {
+        seg.className += " fill";
+        var sp = document.createElement("span");
+        sp.textContent = labels[i];
+        seg.appendChild(sp);
+      }
+      win.appendChild(seg);
+    }
+  }
+
+  // ---- work bars (squares of the turn number) -----------------------
+  var work = document.getElementById("work");
+  if (work) {
+    var max = 36;
+    for (var t = 1; t <= 6; t++) {
+      var col = document.createElement("div");
+      col.className = "b";
+      var bar = document.createElement("i");
+      var v = t * t;
+      bar.style.height = Math.round((v / max) * 100) + "%";
+      var cap = document.createElement("em");
+      cap.textContent = "×" + v;
+      col.appendChild(bar);
+      col.appendChild(cap);
+      work.appendChild(col);
+    }
+  }
+
+  // ---- waveforms ----------------------------------------------------
+  function buildWave(id, n, seed) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    for (var i = 0; i < n; i++) {
+      var bar = document.createElement("i");
+      var a = Math.abs(Math.sin((i + seed) * 0.62) * Math.cos((i + seed) * 0.27));
+      var env = Math.sin((i / (n - 1)) * Math.PI);
+      var h = 0.1 + env * (0.28 + a * 0.72);
+      bar.style.setProperty("--h", h.toFixed(3));
+      bar.style.setProperty("--i", String(i));
+      bar.className = "on";
+      el.appendChild(bar);
+    }
+  }
+  buildWave("wvIn", 76, 1.4);
+  buildWave("wvOut", 76, 4.7);
+
+  // ---- nav + dark state ---------------------------------------------
+  var links = Array.prototype.slice.call(document.querySelectorAll(".nav a"));
+  var secs = links.map(function (a) {
+    return document.querySelector(a.getAttribute("href"));
+  });
+
+  if ("IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        var i = secs.indexOf(e.target);
+        links.forEach(function (a, j) { a.classList.toggle("on", j === i); });
+        document.body.classList.toggle("dark", e.target.classList.contains("dark"));
+      });
+    }, { threshold: 0.5 });
+    secs.forEach(function (s) { if (s) io.observe(s); });
+  }
+  links[0].classList.add("on");
+  document.body.classList.add("dark");
+})();
+</script>
+</body>
+</html>

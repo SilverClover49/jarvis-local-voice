@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Jarvis works — a picture guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#FBFAF7; --card:#fff; --rule:#E2DED4;
+  --ink:#1A1D21; --ink-2:#4A5058; --ink-3:#878E96;
+  --red:#C2310F; --red-soft:#FDF0EC;
+  --green:#0F6E4F; --green-soft:#EAF5F0;
+  --blue:#1B5E9E; --blue-soft:#EDF4FB;
+  --amber:#8A5A00; --amber-soft:#FDF6E7;
+  --sans:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --mono:"Geist Mono",ui-monospace,Consolas,monospace;
+}
+*{ box-sizing:border-box; }
+body{ margin:0; background:var(--paper); color:var(--ink); font:400 18px/1.65 var(--sans); -webkit-font-smoothing:antialiased; }
+.wrap{ max-width:880px; margin:0 auto; padding:52px 24px 120px; }
+
+h1{ font:600 44px/1.1 var(--sans); letter-spacing:-.03em; margin:0 0 12px; }
+h2{ font:600 28px/1.2 var(--sans); letter-spacing:-.02em; margin:56px 0 8px; padding-top:28px; border-top:2px solid var(--rule); }
+h2 .n{ display:inline-grid; place-items:center; width:36px; height:36px; border-radius:50%; background:var(--red); color:#fff; font:600 17px/1 var(--mono); margin-right:12px; vertical-align:3px; }
+h3{ font:600 20px/1.3 var(--sans); margin:28px 0 6px; }
+p{ margin:0 0 14px; color:var(--ink-2); }
+.lead{ font-size:21px; line-height:1.55; color:var(--ink); max-width:38ch; }
+
+.tldr{ background:var(--blue-soft); border-left:4px solid var(--blue); padding:14px 18px; border-radius:0 8px 8px 0; margin:16px 0 22px; font-size:18px; color:var(--ink); }
+.tldr b{ color:var(--blue); }
+
+.card{ background:var(--card); border:2px solid var(--rule); border-radius:12px; padding:18px 22px; margin:18px 0; }
+.card.warn{ background:var(--amber-soft); border-color:#F0DCA8; }
+.card.bad{ background:var(--red-soft); border-color:#F5CDC2; }
+.card.good{ background:var(--green-soft); border-color:#BFE0D1; }
+.card h4{ margin:0 0 8px; font:600 14px/1.3 var(--mono); letter-spacing:.05em; text-transform:uppercase; color:var(--ink-3); }
+.card.bad h4{ color:var(--red); }
+.card.good h4{ color:var(--green); }
+.card.warn h4{ color:var(--amber); }
+
+.pipe{ display:grid; grid-template-columns:1fr auto 1fr auto 1fr; align-items:stretch; margin:24px 0; text-align:center; }
+.pipe .node{ background:var(--card); border:2px solid var(--rule); border-radius:12px; padding:18px 10px; }
+.pipe .node .emoji{ font-size:32px; display:block; margin-bottom:6px; }
+.pipe .node .job{ font:600 16px/1.3 var(--sans); }
+.pipe .node .file{ font:400 11px/1.4 var(--mono); color:var(--ink-3); margin-top:5px; word-break:break-all; }
+.pipe .arrow{ display:grid; place-items:center; padding:0 6px; font:400 20px/1 var(--mono); color:var(--ink-3); }
+.pipe .arrow small{ display:block; font-size:10px; color:var(--ink-3); margin-top:3px; }
+
+.versus{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:20px 0; }
+.versus>div{ background:var(--card); border:2px solid var(--rule); border-radius:12px; padding:16px 18px; }
+.versus .lab{ font:600 11.5px/1 var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3); margin-bottom:8px; }
+.versus .val{ font:500 24px/1 var(--mono); margin-bottom:5px; }
+.versus .note{ font-size:14.5px; color:var(--ink-2); line-height:1.45; }
+.versus .win .val{ color:var(--green); }
+.versus .lose .val{ color:var(--ink-3); }
+
+code{ font-family:var(--mono); font-size:.87em; background:#EFEDE7; padding:2px 6px; border-radius:4px; color:var(--ink); }
+pre{ background:#1A1D21; color:#EDEBE6; border-radius:10px; padding:18px 20px; overflow-x:auto; margin:14px 0; font:400 14px/1.7 var(--mono); }
+pre .c{ color:#7B8494; }
+pre .k{ color:#F08B6A; }
+pre .s{ color:#7BCBA0; }
+
+.steps{ counter-reset:step; list-style:none; padding:0; margin:18px 0; }
+.steps li{ counter-increment:step; position:relative; padding:14px 0 14px 52px; border-bottom:2px solid var(--rule); }
+.steps li::before{ content:counter(step); position:absolute; left:0; top:14px; width:32px; height:32px; border-radius:50%; background:var(--ink); color:#fff; display:grid; place-items:center; font:600 15px/1 var(--mono); }
+.steps li b{ display:block; font-size:18px; margin-bottom:2px; }
+.steps li span{ font-size:15.5px; color:var(--ink-2); }
+
+.err{ background:var(--card); border:2px solid var(--rule); border-radius:12px; margin:14px 0; overflow:hidden; }
+.err .sym{ background:var(--red-soft); padding:11px 18px; border-bottom:2px solid #F5CDC2; font:500 14.5px/1.4 var(--mono); color:var(--red); }
+.err .body{ padding:14px 18px; }
+.err .body p{ margin:0 0 8px; font-size:16px; }
+.err .body p:last-child{ margin:0; }
+.err .fix{ font-size:15.5px; color:var(--green); font-weight:500; }
+
+table{ border-collapse:collapse; width:100%; margin:18px 0; font-size:15px; }
+th,td{ text-align:left; padding:10px 12px; border-bottom:2px solid var(--rule); vertical-align:top; }
+th{ font:600 11.5px/1 var(--mono); letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); }
+td code{ font-size:12.5px; }
+
+kbd{ font:500 12px/1 var(--mono); background:#fff; border:2px solid var(--rule); border-bottom-width:3px; border-radius:5px; padding:3px 7px; }
+
+@media (max-width:680px){
+  h1{ font-size:32px; }
+  h2{ font-size:22px; }
+  .pipe{ grid-template-columns:1fr; }
+  .pipe .arrow{ padding:5px 0; }
+  .pipe .arrow span{ display:none; }
+  .versus{ grid-template-columns:1fr; }
+  .wrap{ padding:32px 16px 80px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>How Jarvis works</h1>
+<p class="lead">A picture guide. No prior knowledge assumed.</p>
+
+<h2><span class="n">1</span>What is this thing?</h2>
+<div class="tldr">
+  <b>In one sentence:</b> three programs run on your laptop. One listens, one
+  thinks, one talks. A web page connects them.
+</div>
+<p>That's the whole project. Everything below is detail.</p>
+
+<div class="pipe">
+  <div class="node"><span class="emoji">👂</span><div class="job">It listens</div><div class="file">whisper<br>32 MB</div></div>
+  <div class="arrow"><span>→</span><small>text</small></div>
+  <div class="node"><span class="emoji">🧠</span><div class="job">It thinks</div><div class="file">qwen<br>533 MB</div></div>
+  <div class="arrow"><span>→</span><small>reply</small></div>
+  <div class="node"><span class="emoji">🗣️</span><div class="job">It talks</div><div class="file">piper<br>63 MB</div></div>
+</div>
+
+<p>You speak. The ears turn your voice into text. The brain reads it and writes a
+reply. The voice reads the reply aloud. Total: about <b>1.2 seconds</b>.</p>
+
+<div class="card good">
+  <h4>Why this is unusual</h4>
+  <p>All three files live on <b>your laptop</b>. Nothing is sent to the internet.
+  Turn off your wifi and it still works. No account, no API key, no monthly bill.</p>
+</div>
+
+<h2><span class="n">2</span>Setting it up</h2>
+
+<ol class="steps">
+  <li><b>Install Python</b><span>Version 3.9 or newer. Check with <code>python --version</code>. On macOS or Linux it might be <code>python3</code>.</span></li>
+  <li><b>Run setup</b><span><code>python setup.py</code> — downloads about 700 MB. Takes a few minutes. If it fails, run it again; it skips what it already has.</span></li>
+  <li><b>Start it</b><span><code>python start.py</code> — starts three background processes and opens the page.</span></li>
+  <li><b>Check the dots</b><span>Top-right of the page. All three must be green: brain, voice, ear.</span></li>
+  <li><b>Stop it</b><span>Press <kbd>Ctrl</kbd>+<kbd>C</kbd> in the window running <code>start.py</code>.</span></li>
+</ol>
+
+<div class="card warn">
+  <h4>On a Mac or Linux machine</h4>
+  <p>Setup can't download the KoboldCpp and whisper.cpp binaries automatically —
+  they're built per platform. Setup prints the exact link and the exact file
+  location. Download, drop it in <code>bin/</code>, then:</p>
+  <pre>chmod +x bin/koboldcpp bin/whisper-server</pre>
+  <p>Without the ear you can still type; you just can't speak.</p>
+</div>
+
+<h2><span class="n">3</span>The four pieces</h2>
+
+<h3>a. The brain</h3>
+<p>One file, 533 MB, <code>qwen3.5-0.8b-q4_k_m.gguf</code>. That file <b>is</b>
+the intelligence. Copy it to a USB stick and you've copied the AI.</p>
+
+<div class="card">
+  <h4>How can a file "think"?</h4>
+  <p>It can't, exactly. It holds <b>800 million numbers</b>. You give it text, the
+  numbers do a huge amount of arithmetic, and out comes a guess at what word
+  should come next. Repeat forty times and you have a sentence.</p>
+</div>
+
+<h3>b. The ears</h3>
+<p><code>ggml-tiny.en-q5_1.bin</code>, 32 MB, called <b>Whisper</b>. Turns sound
+into text.</p>
+<p>Why not the browser's built-in speech recognition? Because Chrome
+<b>sends your audio to Google</b> to transcribe it. That would make the whole
+"private and offline" promise a lie. So we use a local one.</p>
+
+<h3>c. The voice</h3>
+<p><code>en_GB-alba-medium.onnx</code>, 63 MB, called <b>Piper</b>. Turns text
+into speech. Four voices ship with it.</p>
+
+<div class="card warn">
+  <h4>This one needs Python</h4>
+  <p>Piper only comes as a Python package, so <code>voice-server.py</code> exists
+  to wrap it in a web address. It's the only Python in the running system, and
+  you never need to edit it.</p>
+</div>
+
+<h3>d. The page</h3>
+<p><code>app/index.html</code> + <code>style.css</code> + <code>app.js</code>.
+This is the bit you see and talk to. It does no AI itself — it just calls the
+three programs above.</p>
+
+<h2><span class="n">4</span>Using it</h2>
+
+<table>
+  <tr><th>Do this</th><th>What happens</th></tr>
+  <tr><td>Type and press <kbd>Enter</kbd></td><td>It answers and speaks</td></tr>
+  <tr><td>Tap the <b>microphone</b> once</td><td>It starts listening, and sends when you stop talking. Tap again to switch off.</td></tr>
+  <tr><td>Click a chat on the left</td><td>Reopens it — chats are saved between visits</td></tr>
+  <tr><td><code>✎</code> / <code>✕</code> on a chat</td><td>Rename / delete</td></tr>
+  <tr><td>Move the <b>Temperature</b> slider</td><td>The next reply changes character</td></tr>
+  <tr><td>Flip <b>Where does it think?</b></td><td>Switches between your laptop and a cloud API</td></tr>
+</table>
+
+<h3>The controls, in plain English</h3>
+<table>
+  <tr><th>Control</th><th>What it actually does</th></tr>
+  <tr><td>Temperature</td><td>How adventurous the word-picking is. 0 = always the likeliest word, so it repeats itself. 0.4 = balanced. 1.2 = creative and frequently wrong.</td></tr>
+  <tr><td>Reply length</td><td>The maximum number of tokens (word pieces) before it stops. 40 is roughly one line.</td></tr>
+  <tr><td>Remember</td><td>How many past messages get re-sent each time. This is the <b>entire</b> memory system. 0 means it forgets everything instantly.</td></tr>
+  <tr><td>Persona</td><td>The system prompt. One sentence telling a generic model who to be.</td></tr>
+</table>
+
+<h2><span class="n">5</span>Local vs cloud</h2>
+
+<p>Flip <b>Where does it think?</b> to <b>Cloud API</b>, paste a
+<a href="https://console.groq.com">Groq</a> key, press Save. The model list fills
+in from the API. Pick one. Ask the same question again.</p>
+
+<div class="versus">
+  <div class="win"><div class="lab">This laptop</div><div class="val">533 MB</div><div class="note">Answers in ~0.4 s. Free forever. Works offline. Private.</div></div>
+  <div class="lose"><div class="lab">Cloud API</div><div class="val">70 billion</div><div class="note">Smarter. Needs internet. Your words leave the machine. Has a bill eventually.</div></div>
+</div>
+
+<p>That comparison is the point of the whole exercise. Neither is better —
+they're different trades.</p>
+
+<h2><span class="n">6</span>Reading the code</h2>
+
+<p><code>app/app.js</code> is about 1000 lines but only four ideas. Find these and
+you've read the whole thing. <b>Full walkthrough with line numbers is in
+<code>docs/CODE-GUIDE.md</code></b> — this is the short version.</p>
+
+<h3><code>buildPrompt()</code> — the secret handshake</h3>
+<pre><span class="c">// the model expects text in exactly this shape</span>
+&lt;|im_start|&gt;system
+You are Jarvis, a warm British butler.
+&lt;|im_end|&gt;
+&lt;|im_start|&gt;user
+Who are you?
+&lt;|im_end|&gt;
+&lt;|im_start|&gt;assistant
+&lt;think&gt;
+
+&lt;/think&gt;</pre>
+
+<p>Those markers are how the model knows who is speaking.</p>
+
+<div class="card bad">
+  <h4>If you delete the &lt;think&gt; block</h4>
+  <p>The model writes out its entire inner monologue first — "Okay, the user is
+  asking who I am, I should reply as a butler…" — and then reads it aloud. Answers
+  take <b>7 seconds instead of 0.4</b>.</p>
+  <p class="fix">Always keep the empty, already-closed &lt;think&gt;&lt;/think&gt;.</p>
+</div>
+
+<h3><code>askLocal()</code> — talking to the brain</h3>
+<pre><span class="k">const</span> res = <span class="k">await</span> fetch(<span class="s">"http://127.0.0.1:5001/api/v1/generate"</span>, {
+  method: <span class="s">"POST"</span>,
+  body: JSON.stringify({ prompt, max_length, temperature }),
+});
+<span class="k">const</span> data = <span class="k">await</span> res.json();
+<span class="k">return</span> data.results[0].text;</pre>
+
+<p><b>127.0.0.1</b> means "this computer". Not a website. That's why it works
+offline. And that's the entire AI integration — one HTTP POST.</p>
+
+<h3><code>speak()</code> — talking to the voice</h3>
+<pre><span class="k">const</span> res = <span class="k">await</span> fetch(<span class="s">"http://127.0.0.1:5002/say"</span>, {
+  body: JSON.stringify({ text, voice, speed }),
+});
+<span class="k">const</span> bytes = <span class="k">await</span> res.arrayBuffer();  <span class="c">// a WAV file</span></pre>
+
+<p>Same pattern. Ask for something, get bytes, play them.</p>
+
+<h2><span class="n">7</span>Where is what</h2>
+
+<table>
+  <tr><th>File</th><th>What's in it</th></tr>
+  <tr><td><code>setup.py</code></td><td>Detects your hardware, downloads everything</td></tr>
+  <tr><td><code>start.py</code></td><td>Starts three servers, opens the page</td></tr>
+  <tr><td><code>voice-server.py</code></td><td>Wraps Piper in an HTTP endpoint</td></tr>
+  <tr><td><code>app/index.html</code></td><td>Structure — the sidebar, sliders, buttons</td></tr>
+  <tr><td><code>app/style.css</code></td><td>All looks. Colours are variables at the top</td></tr>
+  <tr><td><code>app/app.js</code></td><td>All behaviour. The interesting file</td></tr>
+  <tr><td><code>app/orb.js</code></td><td>The glowing blob</td></tr>
+  <tr><td><code>lint.js</code></td><td>Checks nothing is broken — <code>node lint.js</code></td></tr>
+</table>
+
+<h2><span class="n">8</span>Common errors</h2>
+
+<div class="err"><div class="sym">brain&nbsp;&nbsp;is red</div><div class="body">
+  <p>The model hasn't loaded or crashed.</p>
+  <p class="fix">→ Wait 20 seconds. If still red, read the window running start.py. If it says a file is missing, run <code>python setup.py</code> again.</p>
+</div></div>
+
+<div class="err"><div class="sym">voice&nbsp;&nbsp;is red</div><div class="body">
+  <p>Piper isn't installed, or the voice server didn't start.</p>
+  <p class="fix">→ <code>pip install piper-tts</code>, then <code>python voice-server.py</code> by hand to see the error.</p>
+</div></div>
+
+<div class="err"><div class="sym">ear&nbsp;&nbsp;is red</div><div class="body">
+  <p>The whisper binary is missing or won't start. On Windows it needs the <code>.dll</code> files beside it in <code>bin/</code>.</p>
+  <p class="fix">→ Re-run setup, or move the dlls next to the exe. Typing still works without it.</p>
+</div></div>
+
+<div class="err"><div class="sym">Page is unstyled</div><div class="body">
+  <p>A stray comment closer in the CSS has ended the stylesheet early — one bad line kills everything after it, silently.</p>
+  <p class="fix">→ <code>node lint.js</code> finds it.</p>
+</div></div>
+
+<div class="err"><div class="sym">Cannot set properties of null</div><div class="body">
+  <p>The script is looking for an element that doesn't exist — usually a misspelt id.</p>
+  <p class="fix">→ The name in <code>getElementById("send")</code> must match <code>id="send"</code> in the HTML. <code>node lint.js</code> checks all of them.</p>
+</div></div>
+
+<div class="err"><div class="sym">The voice says "asterisk asterisk"</div><div class="body">
+  <p>The model wrote Markdown and the speaker read the symbols.</p>
+  <p class="fix">→ Already stripped automatically. If you see it, check <code>clean()</code> in app.js.</p>
+</div></div>
+
+<div class="err"><div class="sym">It refuses everything</div><div class="body">
+  <p>Temperature too high, or a persona that forbids things.</p>
+  <p class="fix">→ Press <b>Reset to defaults</b>.</p>
+</div></div>
+
+<div class="err"><div class="sym">Port 5001 is already in use</div><div class="body">
+  <p>An old copy is still running.</p>
+  <p class="fix">→ Close the previous window, or restart the machine. <code>start.py</code> warns about this on launch.</p>
+</div></div>
+
+<h2><span class="n">9</span>What it's bad at</h2>
+
+<p>Be honest about this, so nothing disappoints you later.</p>
+
+<div class="versus">
+  <div class="win"><div class="lab">Good at</div><div class="val">Short replies</div><div class="note">Two or three sentences, in a voice you chose, under a second.</div></div>
+  <div class="lose"><div class="lab">Bad at</div><div class="val">Big sums</div><div class="note">17 × 23 is about its limit. It'll get it right, then get it wrong.</div></div>
+</div>
+<div class="versus">
+  <div class="win"><div class="lab">Good at</div><div class="val">Private data</div><div class="note">Nothing you say ever leaves the machine.</div></div>
+  <div class="lose"><div class="lab">Bad at</div><div class="val">Today's news</div><div class="note">Its knowledge stops at its training date.</div></div>
+</div>
+
+<div class="card warn">
+  <h4>The important one</h4>
+  <p>It doesn't know when it's wrong. It will say something false with exactly the
+  same confidence as something true. That isn't a bug you can patch — it's how
+  this kind of model works.</p>
+</div>
+
+<h2><span class="n">10</span>The one thing to remember</h2>
+<div class="card good">
+  <p style="font-size:21px;line-height:1.5;color:var(--ink);margin:0">
+    The AI is <b>628 MB of files</b> sitting on your laptop.<br>
+    Not a website. Not a company. Files.
+  </p>
+</div>
+<p>ChatGPT's version lives in a warehouse of graphics cards. Yours lives in a
+folder. It's much less clever — and it's completely yours, costs nothing, and
+never tells anyone what you asked it.</p>
+<p>That trade is the whole point.</p>
+
+</div>
+</body>
+</html>

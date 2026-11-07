@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jarvis — running on this laptop</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- full-screen orb, shown while listening or speaking -->
+<div id="stage">
+  <canvas id="orb"></canvas>
+  <div id="caption"></div>
+</div>
+
+<div class="shell">
+
+  <!-- ── chat history ─────────────────────────────────────── -->
+  <nav id="chats" aria-label="Conversations">
+    <div class="chats-head">
+      <span>Chats</span>
+      <button id="new-chat" title="Start a new chat">+ New</button>
+    </div>
+    <ul id="chat-list"></ul>
+    <div class="chats-foot">
+      <button id="export-chats" title="Download as JSON">Export</button>
+    </div>
+  </nav>
+
+  <div class="col">
+    <header>
+      <div class="mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#0a1628" stroke-width="2.4" stroke-linecap="round">
+          <path d="M12 3v10M8 7v6M16 7v6M4 10v2M20 10v2"/>
+        </svg>
+      </div>
+      <h1>Jarvis<span id="chat-title">Running on this laptop</span></h1>
+      <div class="status">
+        <div class="chip" id="c-brain"><i></i>brain</div>
+        <div class="chip" id="c-voice"><i></i>voice</div>
+        <div class="chip" id="c-ear"><i></i>ear</div>
+      </div>
+    </header>
+
+    <main>
+      <div id="log"></div>
+
+      <aside>
+        <div class="card">
+          <h2>Persona</h2>
+          <select id="persona">
+            <option value="jarvis">Jarvis — dry British butler</option>
+            <option value="mentor">Mentor — patient teacher</option>
+            <option value="pirate">Pirate — chaos mode</option>
+            <option value="custom">Write your own…</option>
+          </select>
+          <textarea id="custom-persona" rows="4" placeholder="You are a… Answer briefly. No emoji."
+                    style="display:none;margin-top:9px"></textarea>
+          <div class="hint">The system prompt is the whole personality.</div>
+        </div>
+
+        <div class="card">
+          <h2>Mind</h2>
+          <label class="rangelabel" for="temp">Temperature <b id="temp-val">0.4</b></label>
+          <input type="range" id="temp" min="0" max="1.5" step="0.05" value="0.4">
+          <div class="hint" id="temp-hint">Low = safe and repetitive. High = creative and wrong.</div>
+
+          <label class="rangelabel" for="maxtok">Reply length <b id="maxtok-val">150</b></label>
+          <input type="range" id="maxtok" min="40" max="400" step="10" value="150">
+          <div class="hint">Tokens, not words. 40 ≈ one line.</div>
+
+          <label class="rangelabel" for="memory">Remember <b id="memory-val">6</b> turns</label>
+          <input type="range" id="memory" min="0" max="16" step="2" value="6">
+          <div class="hint">0 = forgets every message.</div>
+
+          <button id="reset" style="width:100%;margin-top:14px">Reset to defaults</button>
+        </div>
+
+        <div class="card">
+          <h2>Voice</h2>
+          <select id="voice">
+            <option value="en_GB-alba-medium">Alba — Scottish female</option>
+            <option value="en_GB-northern_english_male-medium">Northern English — male</option>
+            <option value="en_US-lessac-medium">Lessac — American female</option>
+            <option value="en_US-ryan-medium">Ryan — American male</option>
+          </select>
+          <label class="toggle"><span>Speak replies</span><input type="checkbox" id="speak" checked></label>
+          <label class="rangelabel" for="speed">Speaking speed <b id="speed-val">1.00</b>×</label>
+          <input type="range" id="speed" min="0.6" max="1.6" step="0.05" value="1">
+        </div>
+
+        <div class="card">
+          <h2>Live</h2>
+          <div class="stat"><span>Thinking</span><span id="s-lat">–</span></div>
+          <div class="stat"><span>Speaking</span><span id="s-tts">–</span></div>
+          <div class="stat"><span>Words</span><span id="s-ctx">0</span></div>
+        </div>
+
+        <div class="card">
+          <h2>Where does it think?</h2>
+          <div class="switch" role="group" aria-label="backend">
+            <button id="be-local" class="on" data-be="local">This laptop</button>
+            <button id="be-cloud" data-be="cloud">Cloud API</button>
+          </div>
+
+          <div id="cloud-setup" style="display:none">
+            <label class="rangelabel" for="api-key">API key <b id="key-state">not set</b></label>
+            <input type="password" id="api-key" placeholder="gsk_…" autocomplete="off">
+            <div class="keyrow">
+              <button id="key-save">Save</button>
+              <button id="key-delete" class="danger">Delete</button>
+            </div>
+
+            <label class="rangelabel" for="model-search">Model <b id="model-count">—</b></label>
+            <input type="text" id="model-search" placeholder="search models…" autocomplete="off">
+            <select id="api-model" size="6" style="margin-top:6px"></select>
+            <div class="hint" id="model-note">Save a key and the list fills from the API.</div>
+            <div class="hint">The key stays in this browser. Only Groq sees it.</div>
+          </div>
+
+          <div class="hint" id="backend-note">
+            Same question, same page — only the address changes.
+          </div>
+        </div>
+
+        <div class="warn" id="warn" style="display:none">
+          <b>Model server offline.</b> Run <code>python start.py</code> first.
+        </div>
+      </aside>
+    </main>
+
+    <footer>
+      <div class="row">
+        <textarea id="in" rows="2" placeholder="Ask anything, or tap the mic and just talk…"></textarea>
+        <button id="mic" title="Toggle listening">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="2" width="6" height="12" rx="3"/>
+            <path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/>
+          </svg>
+        </button>
+        <button id="send" class="primary">Send</button>
+      </div>
+      <div class="foothint">
+        <span><kbd>Enter</kbd> send</span>
+        <span><kbd>Shift</kbd>+<kbd>Enter</kbd> newline</span>
+        <span><kbd>Ctrl</kbd>+<kbd>Enter</kbd> new chat</span>
+        <span id="note" style="margin-left:auto"></span>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<script src="orb.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

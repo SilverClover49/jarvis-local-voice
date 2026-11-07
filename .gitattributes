@@ -1,0 +1,18 @@
+# Normalise line endings so the repo works the same on Windows, macOS and Linux.
+# Python and JavaScript don't care, but the shell scripts do, and consistent
+# endings keep diffs clean.
+* text=auto eol=lf
+
+*.py    text eol=lf
+*.js    text eol=lf
+*.html  text eol=lf
+*.css   text eol=lf
+*.md    text eol=lf
+*.json  text eol=lf
+
+# binaries that setup.py downloads are never committed anyway
+*.exe   binary
+*.dll   binary
+*.gguf  binary
+*.onnx  binary
+*.bin   binary

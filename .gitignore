@@ -1,0 +1,24 @@
+# ── downloaded by setup.py, never committed ──────────────────
+/bin/*
+!/bin/.gitkeep
+/models/*
+!/models/.gitkeep
+/voices/*
+!/voices/.gitkeep
+
+# generated at setup time, machine specific
+config.json
+
+# ── noise ────────────────────────────────────────────────────
+*.log
+*.out
+*.err
+*.part
+*.zip
+__pycache__/
+*.py[cod]
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+node_modules/

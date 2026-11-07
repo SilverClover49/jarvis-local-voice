@@ -347,10 +347,11 @@ const clean = (t) => t
   .replace(/\\times/g, "times")
   .replace(/\\[a-zA-Z]+/g, "")              // other latex commands
   .replace(/\s{2,}/g, " ")
+  .trim()
   /* the model often starts with a lowercase "sir," which reads wrong at the
-     start of a sentence — capitalise the first letter */
-  .replace(/^([a-z])/, (c) => c.toUpperCase())
-  .trim();
+     start of a sentence. Trim first, then capitalise — otherwise leading
+     whitespace means the ^ anchor never matches. */
+  .replace(/^([a-z])/, (c) => c.toUpperCase());
 
 /* ── which machine does the thinking ──────────────────────── */
 const GROQ_BASE = "https://api.groq.com/openai/v1";
@@ -659,9 +660,59 @@ function flipPhrase() {
   });
 }
 
+/* ── the ears ─────────────────────────────────────────────────
+   Preferred: send the WAV to whisper.cpp on :8081. It is local, private, and
+   fast (~0.5 s).
+
+   Fallback: if whisper isn't installed (common on macOS, where whisper.cpp
+   ships no prebuilt binary), use the browser's own speech recognition. It
+   works, it needs no download — but on Chrome it sends audio to Google, so it
+   is a compromise, not the default. The chip tells you which one is in use. */
+let earMode = "whisper";      // "whisper" | "browser" | "off"
+
+function browserSTTAvailable() {
+  return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+}
+
+function listenWithBrowser() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+
+  const rec = new SR();
+  rec.lang = "en-US";
+  rec.interimResults = false;
+  rec.continuous = false;
+  rec.maxAlternatives = 1;
+
+  const done = (text) => {
+    const clean = (text || "").trim();
+    $("note").textContent = clean ? "" : "didn't catch that";
+    if (clean) send(clean);
+    else setState(state.listening ? "hearing" : "waiting");
+  };
+
+  rec.onresult = (e) => done(e.results[0][0].transcript);
+  rec.onerror = (e) => {
+    $("note").textContent = "mic: " + e.error;
+    setState(state.listening ? "hearing" : "waiting");
+  };
+  rec.onend = () => {
+    if (state.listening) setState("hearing");
+  };
+
+  setState("thinking");
+  $("note").textContent = "listening (browser)…";
+  rec.start();
+}
+
 async function transcribe(chunks) {
   const total = chunks.reduce((n, c) => n + c.length, 0);
   if (total < sampleRate * 0.2) return;
+
+  if (earMode === "browser") {
+    listenWithBrowser();
+    return;
+  }
 
   const flat = new Float32Array(total);
   let at = 0;
@@ -951,7 +1002,21 @@ async function probe() {
 
   const brain = await check(BRAIN + "/api/v1/model", "c-brain");
   await check(VOICE + "/health", "c-voice");
-  await check(EAR + "/", "c-ear");
+
+  /* the ear has two possible sources: whisper.cpp, or the browser's own
+     recognition. Prefer whisper — it's local and private. */
+  const whisper = await check(EAR + "/", "c-ear");
+
+  if (whisper) {
+    earMode = "whisper";
+  } else if (browserSTTAvailable()) {
+    earMode = "browser";
+    chip("c-ear", "warn");
+    $("c-ear").lastChild.textContent = "ear · browser";
+  } else {
+    earMode = "off";
+    chip("c-ear", "bad");
+  }
 
   $("warn").dataset.offline = brain ? "0" : "1";
   $("warn").style.display = brain ? "none" : "block";

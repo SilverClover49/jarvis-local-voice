@@ -44,6 +44,10 @@ WHISPER_ZIP = ("https://github.com/ggml-org/whisper.cpp/releases/"
                "download/b5454/whisper-bin-x64.zip")
 KOBOLD_WIN = ("https://github.com/LostRuins/koboldcpp/releases/"
               "download/v1.124.2/koboldcpp-nocuda.exe")
+KOBOLD_MAC = ("https://github.com/LostRuins/koboldcpp/releases/"
+              "download/v1.124.2/koboldcpp-mac-arm64")
+KOBOLD_LINUX = ("https://github.com/LostRuins/koboldcpp/releases/"
+                "download/v1.124.2/koboldcpp-linux-x64-nocuda")
 
 
 # ── pretty output ────────────────────────────────────────────
@@ -183,20 +187,25 @@ def install_brain(hw: dict) -> None:
 
     if hw["os"] == "Windows":
         fetch(KOBOLD_WIN, dest, "KoboldCpp for Windows")
+
     elif hw["os"] == "macOS":
         if hw["apple_silicon"]:
-            warn("On Apple Silicon, download koboldcpp-mac-arm64 from:")
+            # there is a prebuilt Apple Silicon binary
+            fetch(KOBOLD_MAC, dest, "KoboldCpp for Apple Silicon")
         else:
-            warn("On Intel Mac, download koboldcpp-mac-x64 from:")
-        warn("  https://github.com/LostRuins/koboldcpp/releases")
-        warn(f"then move it to bin/{exe} and run:  chmod +x bin/{exe}")
-    else:
-        warn("On Linux, download koboldcpp-linux-x64 from:")
-        warn("  https://github.com/LostRuins/koboldcpp/releases")
-        warn(f"then move it to bin/{exe} and run:  chmod +x bin/{exe}")
+            warn("No prebuilt binary for Intel Macs.")
+            warn("Build it, or use a machine with Apple Silicon:")
+            warn("  https://github.com/LostRuins/koboldcpp#macos")
+
+    else:  # Linux
+        fetch(KOBOLD_LINUX, dest, "KoboldCpp for Linux")
 
     if dest.exists() and hw["os"] != "Windows":
         dest.chmod(0o755)
+        # macOS quarantines anything downloaded by a script; clear the flag
+        if hw["os"] == "macOS":
+            subprocess.run(["xattr", "-d", "com.apple.quarantine", str(dest)],
+                           capture_output=True)
 
 
 # ── the ear binary ───────────────────────────────────────────
@@ -225,13 +234,63 @@ def install_ear(hw: dict) -> None:
             if dest.exists():
                 good(f"bin/{exe} ready")
                 return
-        warn("whisper-server not extracted - microphone will be off")
+        warn("whisper-server not extracted")
+
+    elif hw["os"] == "Linux" and hw["arch"] == "x64":
+        # whisper.cpp publishes an Ubuntu build; it usually runs on other distros
+        tgz = HERE / "bin" / "_whisper.tar.gz"
+        url = ("https://github.com/ggml-org/whisper.cpp/releases/"
+               "download/b5454/whisper-bin-ubuntu-x64.tar.gz")
+        if fetch(url, tgz, "whisper.cpp for Linux"):
+            import tarfile
+
+            unpack = HERE / "bin" / "_whisper"
+            with tarfile.open(tgz) as t:
+                t.extractall(unpack)
+            found = list(unpack.rglob("whisper-server"))
+            if found:
+                shutil.copy2(found[0], dest)
+                dest.chmod(0o755)
+                good("bin/whisper-server ready")
+            shutil.rmtree(unpack, ignore_errors=True)
+            tgz.unlink(missing_ok=True)
+            if dest.exists():
+                return
+
+    elif hw["os"] == "macOS":
+        # There is no prebuilt whisper.cpp binary for macOS. Homebrew has one,
+        # and it is a single command if the student already uses brew.
+        if shutil.which("brew"):
+            step("installing whisper-cpp with Homebrew ...")
+            r = subprocess.run(["brew", "install", "whisper-cpp"],
+                               capture_output=True, text=True)
+            server = shutil.which("whisper-server") or shutil.which("whisper-cpp")
+            if r.returncode == 0 and server:
+                # Homebrew ships whisper-cpp which runs a server with the same flags
+                shutil.copy2(server, dest)
+                dest.chmod(0o755)
+                good("bin/whisper-server ready (via Homebrew)")
+                return
+            warn("brew install whisper-cpp did not produce a server binary")
+        else:
+            warn("No prebuilt whisper.cpp for macOS.")
+            warn("Either install Homebrew and re-run:")
+            warn("  /bin/bash -c \"$(curl -fsSL https://brew.sh)\"")
+            warn("  python setup.py")
+            warn("or build the server yourself:")
+            warn("  git clone https://github.com/ggml-org/whisper.cpp")
+            warn("  cd whisper.cpp && make whisper-server")
+            warn(f"  cp whisper-server <this folder>/bin/{dest.name}")
+
     else:
-        warn("Build whisper.cpp for this platform:")
+        warn("No prebuilt whisper.cpp for this platform.")
+        warn("Build it:")
         warn("  git clone https://github.com/ggml-org/whisper.cpp")
         warn("  cd whisper.cpp && make whisper-server")
-        warn(f"  cp whisper-server <this folder>/bin/{exe}")
-        warn("Without it, typing works but the microphone does not.")
+        warn(f"  cp whisper-server <this folder>/bin/{dest.name}")
+
+    if not dest.exists():
+        warn("Microphone will be off. Typing still works.")
 
 
 # ── voices ───────────────────────────────────────────────────

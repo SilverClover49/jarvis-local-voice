@@ -31,23 +31,28 @@ On macOS or Linux you may need `python3` instead of `python`.
 `setup.py` detects your OS, CPU cores and RAM, then downloads the right binaries
 and picks a sensible thread count. Re-running it is safe; it skips what's there.
 
-### What setup can't fetch automatically
+### Platform support — read this before you promise it to anyone
 
-On **macOS and Linux** the KoboldCpp and whisper.cpp binaries are platform
-specific. `setup.py` prints the exact links. Short version:
+| | Windows x64 | macOS (Apple Silicon) | macOS (Intel) | Linux x64 |
+|---|---|---|---|---|
+| Brain | **auto** | **auto** | build it | **auto** |
+| Voice | **auto** | **auto** | **auto** | **auto** |
+| Ear | **auto** | Homebrew, or build | Homebrew, or build | **auto** |
 
-| | Windows | macOS | Linux |
-|---|---|---|---|
-| Brain | auto | [releases](https://github.com/LostRuins/koboldcpp/releases) → `bin/koboldcpp` | same |
-| Ear | auto | build [whisper.cpp](https://github.com/ggml-org/whisper.cpp) → `bin/whisper-server` | same |
+"auto" means setup downloads it. Everything else means one manual step, and
+setup prints the exact command when it gets there.
 
-Then:
+**Why the gaps exist.** KoboldCpp publishes a prebuilt `koboldcpp-mac-arm64` but
+nothing for Intel Macs. whisper.cpp publishes Windows and Ubuntu builds but
+**no macOS binary at all** — so on a Mac the ear needs either Homebrew
+(`brew install whisper-cpp`, which setup will run for you if brew is present) or
+a local build.
 
-```bash
-chmod +x bin/koboldcpp bin/whisper-server
-```
+**If the ear is missing, the mic still works.** The page falls back to the
+browser's own speech recognition and the ear chip shows `ear · browser`. There's
+one honest caveat: on Chrome that fallback sends your audio to Google, so it
+breaks the "nothing leaves the machine" promise. Typing always stays local.
 
-If the ear is missing you can still type — you just can't speak.
 
 ---
 

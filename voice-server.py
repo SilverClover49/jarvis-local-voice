@@ -34,6 +34,14 @@ except ImportError:
     print("piper-tts is not installed.  Run:  pip install piper-tts", file=sys.stderr)
     raise SystemExit(1)
 
+# Speed is passed through a SynthesisConfig object, not a keyword argument.
+# Newer piper versions expose it there; older ones don't have it at all, so the
+# import is guarded and we fall back to default speed rather than crashing.
+try:
+    from piper.config import SynthesisConfig
+except ImportError:                                  # noqa: BLE001
+    SynthesisConfig = None
+
 HERE = Path(__file__).resolve().parent
 VOICE_DIR = HERE / "voices"
 PORT = int(os.environ.get("VOICE_PORT", "5002"))
@@ -69,18 +77,35 @@ def synth(text: str, name: str, speed: float = 1.0) -> tuple[bytes, int, int]:
     speed = max(0.5, min(2.0, speed or 1.0))
     length_scale = 1.0 / speed
 
-    buf = io.BytesIO()
+    # Collect the audio FIRST, then write the WAV. Opening the WAV before any
+    # chunk arrives means a synthesis that returns nothing never writes a
+    # header, and wave.close() then raises "# channels not specified" - which
+    # surfaces to the page as a bare 500.
+    frames: list[bytes] = []
     rate = 22050
+
+    # piper 1.8 takes a SynthesisConfig; passing length_scale as a keyword
+    # raises TypeError. Build the config only if this version has it.
+    kwargs = {}
+    if SynthesisConfig is not None:
+        cfg = SynthesisConfig(length_scale=length_scale)
+        kwargs["syn_config"] = cfg
+
+    for chunk in voice.synthesize(text, **kwargs):
+        if not frames:
+            rate = chunk.sample_rate
+        frames.append(chunk.audio_int16_bytes)
+
+    if not frames:
+        raise ValueError("the voice produced no audio for that text")
+
+    buf = io.BytesIO()
     with wave.open(buf, "wb") as wav:
-        first = True
-        for chunk in voice.synthesize(text, length_scale=length_scale):
-            if first:
-                wav.setnchannels(1)
-                wav.setsampwidth(2)
-                wav.setframerate(chunk.sample_rate)
-                rate = chunk.sample_rate
-                first = False
-            wav.writeframes(chunk.audio_int16_bytes)
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(rate)
+        for block in frames:
+            wav.writeframes(block)
 
     return buf.getvalue(), int((time.perf_counter() - t0) * 1000), rate
 
@@ -147,7 +172,12 @@ class Handler(BaseHTTPRequestHandler):
         try:
             data, ms, rate = synth(text, name, speed)
         except Exception as exc:                # noqa: BLE001 - shown to the page
-            self._json(500, {"ok": False, "error": str(exc)})
+            # print the whole traceback, not just str(exc): a bare message on
+            # stderr is how a real bug stayed invisible for a day
+            import traceback
+
+            traceback.print_exc()
+            self._json(500, {"ok": False, "error": f"{type(exc).__name__}: {exc}"})
             return
 
         seconds = max(0.0, (len(data) - 44) / (rate * 2))
@@ -169,14 +199,29 @@ if __name__ == "__main__":
         print("Run:  python setup.py", file=sys.stderr)
         raise SystemExit(1)
 
-    warm = DEFAULT if DEFAULT in found else found[0]
-    print(f"loading {warm} ...", end=" ", flush=True)
-    load(warm)
-    print("ready")
+    # Bind FIRST, then load. Loading a voice takes 3-7 seconds, and if we load
+    # before binding, the page sees a refused connection and shows
+    # "failed to fetch" — which looks like a broken app rather than a slow start.
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    except OSError as exc:
+        print(f"Port {PORT} is already in use ({exc}).", file=sys.stderr)
+        print("Another copy is probably running. Close it and try again.", file=sys.stderr)
+        raise SystemExit(1)
 
-    server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     print(f"Jarvis voice server on http://127.0.0.1:{PORT}")
     print(f"voices: {', '.join(found)}")
+
+    warm = DEFAULT if DEFAULT in found else found[0]
+    print(f"loading {warm} ...", end=" ", flush=True)
+    try:
+        load(warm)
+        print("ready")
+    except Exception as exc:                              # noqa: BLE001
+        print(f"\ncould not load {warm}: {exc}")
+        print("The server is still up; a voice loads on first use.")
+        print("If this repeats, try:  pip uninstall onnxruntime-gpu")
+
     try:
         server.serve_forever()
     except KeyboardInterrupt:

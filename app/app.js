@@ -517,16 +517,33 @@ async function think(text) {
 /* ------------------------------------------------------------ */
 async function speak(text) {
   const t0 = performance.now();
-  const res = await fetch(VOICE + "/say", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      text,
-      voice: $("voice").value,
-      speed: Number($("speed").value),
-    }),
-  });
-  if (!res.ok) throw new Error("voice " + res.status);
+
+  let res;
+  try {
+    res = await fetch(VOICE + "/say", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text,
+        voice: $("voice").value,
+        speed: Number($("speed").value),
+      }),
+    });
+  } catch {
+    /* A network-level failure here is almost always "the voice server isn't
+       running" or "it is still loading its first voice". Say that plainly —
+       "Failed to fetch" tells the student nothing. */
+    chip("c-voice", "bad");
+    throw new Error(
+      "voice server not reachable on :5002 — is python voice-server.py running? " +
+      "(it takes a few seconds to load a voice)"
+    );
+  }
+
+  if (!res.ok) {
+    chip("c-voice", "bad");
+    throw new Error("voice server said " + res.status);
+  }
 
   const bytes = await res.arrayBuffer();
   const ms = Number(res.headers.get("X-Synth-Ms")) || (performance.now() - t0);

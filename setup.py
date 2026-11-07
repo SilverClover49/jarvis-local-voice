@@ -324,6 +324,20 @@ def install_voices() -> None:
     except Exception:
         warn("pip install failed. Run manually:  pip install piper-tts")
 
+    # onnxruntime-gpu and onnxruntime install the same module under different
+    # versions. Having both makes Piper take ~7 s to load instead of ~3, and on
+    # a machine with no CUDA it can fail outright. Piper only needs the CPU
+    # build, so remove the GPU one if it's there.
+    have_gpu = subprocess.run(
+        [sys.executable, "-m", "pip", "show", "onnxruntime-gpu"],
+        capture_output=True).returncode == 0
+
+    if have_gpu:
+        step("removing onnxruntime-gpu (it conflicts with piper's onnxruntime) ...")
+        subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "-q",
+                        "onnxruntime-gpu"], capture_output=True)
+        good("removed onnxruntime-gpu")
+
 
 # ── main ─────────────────────────────────────────────────────
 def main() -> None:
